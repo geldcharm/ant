@@ -10,7 +10,6 @@ export default function JobDetail() {
   const [job, setJob] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
 
   async function load() {
     const [j, e] = await Promise.all([getJob(id), getEmployees()]);
@@ -22,7 +21,7 @@ export default function JobDetail() {
 
   async function changeStatus(s) {
     const updated = await updateJob(id, { status: s });
-    setJob(updated); setStatusOpen(false);
+    setJob(updated);
   }
 
   async function handleDelete() {
@@ -114,31 +113,19 @@ export default function JobDetail() {
 
       {/* Status Changer */}
       <Card className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-sm text-[#1A1A18]">Job Status</h2>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {JOB_STATUSES.map((st, i) => {
-            const isCurrent = st.value === job.status;
-            const currentIdx = JOB_STATUSES.findIndex(s => s.value === job.status);
-            const isPast = i < currentIdx;
-            return (
-              <button
-                key={st.value}
-                onClick={() => changeStatus(st.value)}
-                className="flex-1 min-w-0 flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border transition-all text-center"
-                style={isCurrent
-                  ? { background: st.color, borderColor: st.color, color: '#fff' }
-                  : isPast
-                  ? { background: st.bg, borderColor: st.color + '60', color: st.color, opacity: 0.7 }
-                  : { background: '#F9F8F5', borderColor: '#E0DED8', color: '#9E9E98' }}
-              >
-                <span className="text-xs font-semibold whitespace-nowrap">{st.label}</span>
-                {isCurrent && <span className="text-[9px] opacity-80">Current</span>}
-              </button>
-            );
-          })}
-        </div>
+        <h2 className="font-semibold text-sm text-[#1A1A18] mb-3">Job Status</h2>
+        <select
+          value={job.status}
+          onChange={e => changeStatus(e.target.value)}
+          className="w-full px-4 py-3 rounded-xl border border-[#E0DED8] bg-white text-sm font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E8611A]/30"
+          style={{ color: s.color }}
+        >
+          {JOB_STATUSES.map(st => (
+            <option key={st.value} value={st.value} style={{ color: st.color }}>
+              {st.label}
+            </option>
+          ))}
+        </select>
       </Card>
 
       {/* Details */}

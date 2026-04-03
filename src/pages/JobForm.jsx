@@ -344,36 +344,18 @@ export default function JobForm() {
       <Card className="p-5 space-y-3">
         <h2 className="font-semibold text-[#1A1A18]">Status</h2>
 
-        {/* Mobile: dropdown */}
-        <div className="md:hidden">
-          <select
-            value={form.status}
-            onChange={e => set('status', e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-[#E0DED8] bg-white text-sm font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E8611A]/30"
-            style={{ color: currentStatus.color }}
-          >
-            {JOB_STATUSES.map(s => (
-              <option key={s.value} value={s.value} style={{ color: s.color }}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Desktop: pill buttons */}
-        <div className="hidden md:flex flex-wrap gap-2">
+        <select
+          value={form.status}
+          onChange={e => set('status', e.target.value)}
+          className="w-full px-4 py-3 rounded-xl border border-[#E0DED8] bg-white text-sm font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E8611A]/30"
+          style={{ color: currentStatus.color }}
+        >
           {JOB_STATUSES.map(s => (
-            <button
-              key={s.value}
-              type="button"
-              onClick={() => set('status', s.value)}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all"
-              style={form.status === s.value
-                ? { background: s.color, color: '#fff', borderColor: s.color }
-                : { background: s.bg, color: s.color, borderColor: s.color + '40' }}
-            >{s.label}</button>
+            <option key={s.value} value={s.value} style={{ color: s.color }}>
+              {s.label}
+            </option>
           ))}
-        </div>
+        </select>
       </Card>
 
       {/* ── Create / Save button ─────────────────── */}

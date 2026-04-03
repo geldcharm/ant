@@ -28,7 +28,7 @@ export default function Calendar() {
   const [current, setCurrent] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [selected, setSelected] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [crewFilter, setCrewFilter] = useState('all'); // 'all' or employee id
+  const [crewFilter, setCrewFilter] = useState([]); // [] = all, or array of employee ids
   const [crewOpen, setCrewOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -40,7 +40,7 @@ export default function Calendar() {
   function applyFilters(jobList) {
     return jobList.filter(j => {
       const matchStatus = statusFilter === 'all' || j.status === statusFilter;
-      const matchCrew = crewFilter === 'all' || (j.assignedEmployees || []).includes(crewFilter);
+      const matchCrew = crewFilter.length === 0 || crewFilter.some(id => (j.assignedEmployees || []).includes(id));
       return matchStatus && matchCrew;
     });
   }
@@ -80,7 +80,7 @@ export default function Calendar() {
     return { date: d, str: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`, label: DAYS[i], num: d.getDate() };
   });
 
-  const selectedCrew = crewFilter === 'all' ? null : employees.find(e => e.id === crewFilter);
+  const selectedCrewMembers = employees.filter(e => crewFilter.includes(e.id));
   const totalFiltered = applyFilters(jobs).length;
 
   return (
@@ -129,23 +129,28 @@ export default function Calendar() {
           <button
             onClick={() => setCrewOpen(o => !o)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap ${
-              crewFilter !== 'all'
+              crewFilter.length > 0
                 ? 'bg-[#1A1A18] text-white border-[#1A1A18]'
                 : 'bg-white text-[#6B6B66] border-[#E0DED8] hover:border-[#1A1A18]/30'
             }`}
           >
-            {crewFilter === 'all' ? (
+            {crewFilter.length === 0 ? (
               <>
                 <span className="text-sm">👥</span>
                 All Crew
               </>
             ) : (
               <>
-                <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
-                  style={{ background: selectedCrew?.color }}
-                >{selectedCrew?.avatar}</span>
-                {selectedCrew?.name.split(' ')[0]}
+                <div className="flex -space-x-1">
+                  {selectedCrewMembers.slice(0, 3).map(e => (
+                    <span
+                      key={e.id}
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 border border-[#1A1A18]"
+                      style={{ background: e.color }}
+                    >{e.avatar?.[0]}</span>
+                  ))}
+                </div>
+                {crewFilter.length === 1 ? selectedCrewMembers[0]?.name.split(' ')[0] : `${crewFilter.length} selected`}
               </>
             )}
             <span className={`ml-1 transition-transform ${crewOpen ? 'rotate-180' : ''}`}>▾</span>
@@ -155,39 +160,44 @@ export default function Calendar() {
             <div className="absolute right-0 top-full mt-1.5 bg-white border border-[#E0DED8] rounded-2xl shadow-xl z-20 min-w-[200px] overflow-hidden">
               {/* All option */}
               <button
-                onClick={() => { setCrewFilter('all'); setCrewOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-[#F5F4F0] transition-colors border-b border-[#E0DED8] ${crewFilter === 'all' ? 'bg-[#F5F4F0] font-semibold' : ''}`}
+                onClick={() => { setCrewFilter([]); setCrewOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-[#F5F4F0] transition-colors border-b border-[#E0DED8] ${crewFilter.length === 0 ? 'bg-[#F5F4F0] font-semibold' : ''}`}
               >
                 <span className="w-7 h-7 rounded-full bg-[#F5F4F0] flex items-center justify-center text-base">👥</span>
                 <span className="text-[#1A1A18] font-medium">All Crew</span>
-                {crewFilter === 'all' && <span className="ml-auto text-[#E8611A] text-xs">✓</span>}
+                {crewFilter.length === 0 && <span className="ml-auto text-[#E8611A] text-xs">✓</span>}
               </button>
 
-              {/* Employee options */}
-              {employees.map(emp => (
-                <button
-                  key={emp.id}
-                  onClick={() => { setCrewFilter(emp.id); setCrewOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-[#F5F4F0] transition-colors ${crewFilter === emp.id ? 'bg-[#FDF0E8]' : ''}`}
-                >
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                    style={{ background: emp.color }}
-                  >{emp.avatar}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-medium truncate ${crewFilter === emp.id ? 'text-[#E8611A]' : 'text-[#1A1A18]'}`}>{emp.name}</p>
-                    <p className="text-[10px] text-[#9E9E98]">{emp.role}</p>
-                  </div>
-                  {crewFilter === emp.id && <span className="text-[#E8611A] text-xs">✓</span>}
-                </button>
-              ))}
+              {/* Employee options — toggle on click */}
+              {employees.map(emp => {
+                const isSelected = crewFilter.includes(emp.id);
+                return (
+                  <button
+                    key={emp.id}
+                    onClick={() => setCrewFilter(prev => isSelected ? prev.filter(id => id !== emp.id) : [...prev, emp.id])}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-[#F5F4F0] transition-colors ${isSelected ? 'bg-[#FDF0E8]' : ''}`}
+                  >
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                      style={{ background: emp.color }}
+                    >{emp.avatar}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium truncate ${isSelected ? 'text-[#E8611A]' : 'text-[#1A1A18]'}`}>{emp.name}</p>
+                      <p className="text-[10px] text-[#9E9E98]">{emp.role}</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${isSelected ? 'border-[#E8611A] bg-[#E8611A]' : 'border-[#E0DED8]'}`}>
+                      {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
       {/* Active filter pills */}
-      {(statusFilter !== 'all' || crewFilter !== 'all') && (
+      {(statusFilter !== 'all' || crewFilter.length > 0) && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-[#9E9E98]">Filtering:</span>
           {statusFilter !== 'all' && (
@@ -199,14 +209,14 @@ export default function Calendar() {
               <button onClick={() => setStatusFilter('all')} className="opacity-60 hover:opacity-100">✕</button>
             </span>
           )}
-          {crewFilter !== 'all' && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1A1A18]/8 text-[#1A1A18]">
-              <span className="w-3.5 h-3.5 rounded-full inline-block" style={{ background: selectedCrew?.color }} />
-              {selectedCrew?.name}
-              <button onClick={() => setCrewFilter('all')} className="opacity-60 hover:opacity-100">✕</button>
+          {selectedCrewMembers.map(emp => (
+            <span key={emp.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#1A1A18]/8 text-[#1A1A18]">
+              <span className="w-3.5 h-3.5 rounded-full inline-block" style={{ background: emp.color }} />
+              {emp.name}
+              <button onClick={() => setCrewFilter(prev => prev.filter(id => id !== emp.id))} className="opacity-60 hover:opacity-100">✕</button>
             </span>
-          )}
-          <button onClick={() => { setStatusFilter('all'); setCrewFilter('all'); }} className="text-xs text-[#E8611A] font-medium hover:underline">Clear all</button>
+          ))}
+          <button onClick={() => { setStatusFilter('all'); setCrewFilter([]); }} className="text-xs text-[#E8611A] font-medium hover:underline">Clear all</button>
         </div>
       )}
 
@@ -256,8 +266,8 @@ export default function Calendar() {
                           className="truncate text-[9px] font-semibold px-1.5 py-0.5 rounded-md flex items-center gap-1"
                           style={{ background: st.bg, color: st.color }}
                         >
-                          {crewFilter !== 'all' && selectedCrew && (
-                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: selectedCrew.color }} />
+                          {crewFilter.length > 0 && crewFilter.length === 1 && selectedCrewMembers[0] && (
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: selectedCrewMembers[0].color }} />
                           )}
                           <span className="truncate">{j.title}</span>
                         </div>
@@ -317,7 +327,7 @@ export default function Calendar() {
                             {team.slice(0,3).map(e => (
                               <div
                                 key={e.id}
-                                style={{ background: e.color, outline: crewFilter === e.id ? `2px solid ${e.color}` : 'none', outlineOffset: '1px' }}
+                                style={{ background: e.color, outline: crewFilter.includes(e.id) ? `2px solid ${e.color}` : 'none', outlineOffset: '1px' }}
                                 className="w-4 h-4 rounded-full border border-white text-[7px] font-bold text-white flex items-center justify-center"
                                 title={e.name}
                               >{e.avatar?.[0]}</div>
@@ -347,8 +357,8 @@ export default function Calendar() {
           {selectedJobs.length === 0 ? (
             <Card className="p-6 text-center">
               <p className="text-[#9E9E98] text-sm">No matching jobs on this day</p>
-              {(statusFilter !== 'all' || crewFilter !== 'all') && (
-                <button onClick={() => { setStatusFilter('all'); setCrewFilter('all'); }} className="text-xs text-[#E8611A] font-medium mt-1 hover:underline">Clear filters</button>
+              {(statusFilter !== 'all' || crewFilter.length > 0) && (
+                <button onClick={() => { setStatusFilter('all'); setCrewFilter([]); }} className="text-xs text-[#E8611A] font-medium mt-1 hover:underline">Clear filters</button>
               )}
             </Card>
           ) : (
@@ -372,7 +382,7 @@ export default function Calendar() {
                         {team.slice(0,3).map(e => (
                           <div
                             key={e.id}
-                            style={{ background: e.color, outline: crewFilter === e.id ? `2px solid ${e.color}` : 'none', outlineOffset: '1px' }}
+                            style={{ background: e.color, outline: crewFilter.includes(e.id) ? `2px solid ${e.color}` : 'none', outlineOffset: '1px' }}
                             className="w-7 h-7 rounded-full border-2 border-white text-[9px] font-bold text-white flex items-center justify-center"
                             title={e.name}
                           >{e.avatar}</div>
