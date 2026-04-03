@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg: #F5F4F0;
+  --surface: #FFFFFF;
+  --surface-alt: #EEEDE8;
+  --border: #E0DED8;
+  --text-primary: #1A1A18;
+  --text-secondary: #6B6B66;
+  --text-muted: #9E9E98;
+  --accent: #E8611A;
+  --accent-light: #FDF0E8;
+  --accent-dark: #C44E10;
+  --sidebar-w: 240px;
+}
+
+* { box-sizing: border-box; }
+body {
+  font-family: 'Sora', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
