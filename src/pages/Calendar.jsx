@@ -13,6 +13,7 @@ function getFirstDayOfMonth(year, month) { const d = new Date(year, month, 1).ge
 // Priority statuses shown first in the filter bar
 const STATUS_FILTERS = [
   { value: 'all',     label: 'All',     color: '#1A1A18', bg: '#F5F4F0' },
+  { value: 'new',     label: 'New',     color: '#9E9E98', bg: '#F5F4F0' },
   { value: 'visit',   label: 'Visit',   color: '#6366F1', bg: '#EEF2FF' },
   { value: 'book',    label: 'Book',    color: '#7C3AED', bg: '#F5F3FF' },
   { value: 'quote',   label: 'Quote',   color: '#D97706', bg: '#FFFBEB' },
@@ -354,6 +355,12 @@ export default function Calendar() {
             </h3>
             <button onClick={() => setSelected(null)} className="text-xs text-[#9E9E98] hover:text-[#1A1A18]">✕ Close</button>
           </div>
+          <button
+            onClick={() => navigate('/jobs/new', { state: { startDate: selected } })}
+            className="w-full flex items-center justify-center gap-2 mb-3 px-4 py-2.5 rounded-xl bg-[#E8611A] text-white text-sm font-semibold hover:bg-[#C44E10] transition-colors shadow-sm"
+          >
+            + Add Job
+          </button>
           {selectedJobs.length === 0 ? (
             <Card className="p-6 text-center">
               <p className="text-[#9E9E98] text-sm">No matching jobs on this day</p>

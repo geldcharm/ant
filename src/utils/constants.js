@@ -1,4 +1,5 @@
 export const JOB_STATUSES = [
+  { value: 'new',     label: 'New',     color: '#9E9E98', bg: '#F5F4F0' },
   { value: 'visit',   label: 'Visit',   color: '#6366F1', bg: '#EEF2FF' },
   { value: 'quote',   label: 'Quote',   color: '#D97706', bg: '#FFFBEB' },
   { value: 'approve', label: 'Approve', color: '#2563EB', bg: '#EFF6FF' },
