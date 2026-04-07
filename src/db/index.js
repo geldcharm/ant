@@ -20,7 +20,7 @@ let employees = [
 let jobs = [
   {
     id: 'j1',
-    title: 'Driveway Resurfacing – Maple St',
+    referenceNumber: 'JOB-0001',
     description: 'Full resurfacing of 200m² driveway. Remove existing surface and lay new asphalt.',
     address: '14 Maple Street, Trondheim',
     status: 'book',
@@ -28,9 +28,9 @@ let jobs = [
     startTime: '08:00',
     endDate: '2026-04-04',
     endTime: '16:00',
-    clientName: 'Jan Nordmann',
-    clientPhone: '+47 950 12 345',
-    clientEmail: 'jan@example.com',
+    contactName: 'Jan Nordmann',
+    contactPhone: '+47 950 12 345',
+    contactEmail: 'jan@example.com',
     assignedEmployees: ['e1', 'e2'],
     photos: [],
     documents: [],
@@ -40,7 +40,7 @@ let jobs = [
   },
   {
     id: 'j2',
-    title: 'Parking Lot Repair – City Mall',
+    referenceNumber: 'JOB-0002',
     description: 'Patch cracks and apply sealcoat to 1,500m² parking area.',
     address: 'City Mall, Beddingen 8, Trondheim',
     status: 'quote',
@@ -48,9 +48,9 @@ let jobs = [
     startTime: '07:00',
     endDate: '2026-04-09',
     endTime: '17:00',
-    clientName: 'City Mall Management',
-    clientPhone: '+47 730 00 000',
-    clientEmail: 'facility@citymall.no',
+    contactName: 'City Mall Management',
+    contactPhone: '+47 730 00 000',
+    contactEmail: 'facility@citymall.no',
     assignedEmployees: ['e1', 'e3', 'e4'],
     photos: [],
     documents: [],
@@ -60,7 +60,7 @@ let jobs = [
   },
   {
     id: 'j3',
-    title: 'Road Edge Repair – Haakon VII',
+    referenceNumber: 'JOB-0003',
     description: 'Edge repair along 400m stretch.',
     address: 'Haakon VIIs gate, Trondheim',
     status: 'done',
@@ -68,9 +68,9 @@ let jobs = [
     startTime: '06:00',
     endDate: '2026-03-25',
     endTime: '14:00',
-    clientName: 'Trondheim Kommune',
-    clientPhone: '+47 720 00 000',
-    clientEmail: 'drift@trondheim.no',
+    contactName: 'Trondheim Kommune',
+    contactPhone: '+47 720 00 000',
+    contactEmail: 'drift@trondheim.no',
     assignedEmployees: ['e2', 'e3'],
     photos: [],
     documents: [],
@@ -80,7 +80,7 @@ let jobs = [
   },
   {
     id: 'j4',
-    title: 'School Courtyard – Lade Skole',
+    referenceNumber: 'JOB-0004',
     description: 'New asphalt surface for school yard.',
     address: 'Ladevegen 10, Trondheim',
     status: 'visit',
@@ -88,14 +88,53 @@ let jobs = [
     startTime: '09:00',
     endDate: '',
     endTime: '',
-    clientName: 'Lade Skole',
-    clientPhone: '+47 732 12 000',
-    clientEmail: 'admin@ladeskole.no',
+    contactName: 'Lade Skole',
+    contactPhone: '+47 732 12 000',
+    contactEmail: 'admin@ladeskole.no',
     assignedEmployees: ['e1'],
     photos: [],
     documents: [],
     receipts: [],
     notes: 'Site visit only – bring camera',
+    createdAt: new Date().toISOString(),
+  },
+];
+
+let quotes = [
+  {
+    id: 'q1',
+    quoteNumber: 'QUO-0001',
+    jobId: 'j2',
+    jobRef: 'JOB-0002',
+    date: '2026-04-07',
+    validUntil: '2026-05-07',
+    status: 'sent',
+    contactName: 'City Mall Management',
+    clientAddress: 'Beddingen 8',
+    clientSuburb: 'Trondheim, 7014',
+    clientCountry: 'Norway',
+    businessName: 'PaveMaster AS',
+    businessAddress: 'Industriveien 12',
+    businessSuburb: 'Trondheim, 7030',
+    businessPhone: '+47 900 00 000',
+    businessEmail: 'post@pavemaster.no',
+    businessAbn: 'Org: 912 345 678',
+    tradeType: 'Paving & Asphalt',
+    licenceNo: 'PA-20198',
+    items: [
+      { id: 'qi1', item: 'Crack repair', description: 'Patch cracks – 150m²', quantity: 150, unitPrice: 85, discountPercent: 0, tax: 'GST (15%)', amount: 12750 },
+      { id: 'qi2', item: 'Sealcoat', description: 'Application – 1,500m²', quantity: 1500, unitPrice: 25, discountPercent: 0, tax: 'GST (15%)', amount: 37500 },
+      { id: 'qi3', item: 'Line marking', description: 'Parking bay lines', quantity: 1, unitPrice: 4800, discountPercent: 0, tax: 'GST (15%)', amount: 4800 },
+    ],
+    subtotal: 55050,
+    gstAmount: 8257.5,
+    total: 63307.5,
+    notes: 'Quote valid for 30 days. Work to be completed outside mall opening hours (18:00–07:00). All work guaranteed 12 months.',
+    paymentTerms: '50% deposit, balance on completion',
+    bankName: 'DNB',
+    bankBsb: '1234',
+    bankAccount: '1234.56.78901',
+    logo: '',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -152,10 +191,23 @@ export async function getJob(id) {
 }
 
 // SUPABASE: supabase.from('jobs').insert([data]).select().single()
+// Generate next reference number based on existing jobs
+function generateReferenceNumber() {
+  const existing = jobs
+    .map(j => j.referenceNumber)
+    .filter(r => r && /^JOB-\d+$/.test(r))
+    .map(r => parseInt(r.replace('JOB-', ''), 10));
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return `JOB-${String(next).padStart(4, '0')}`;
+}
+
+export { generateReferenceNumber };
+
 export async function createJob(data) {
   await delay();
   const job = {
     id: uuidv4(),
+    referenceNumber: data.referenceNumber || generateReferenceNumber(),
     assignedEmployees: [],
     photos: [],
     documents: [],
@@ -200,4 +252,56 @@ export async function removeFileFromJob(jobId, type, fileId) {
     const field = type === 'photo' ? 'photos' : type === 'document' ? 'documents' : 'receipts';
     return { ...j, [field]: j[field].filter(f => f.id !== fileId) };
   });
+}
+
+// ── Quotes API ───────────────────────────────────────────────
+
+function generateQuoteNumber() {
+  const existing = quotes
+    .map(q => q.quoteNumber)
+    .filter(r => r && /^QUO-\d+$/.test(r))
+    .map(r => parseInt(r.replace('QUO-', ''), 10));
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return `QUO-${String(next).padStart(4, '0')}`;
+}
+
+export { generateQuoteNumber };
+
+export async function getQuotes() {
+  await delay();
+  return [...quotes];
+}
+
+export async function getQuote(id) {
+  await delay();
+  return quotes.find(q => q.id === id) || null;
+}
+
+export async function createQuote(data) {
+  await delay();
+  const quote = {
+    id: uuidv4(),
+    quoteNumber: data.quoteNumber || generateQuoteNumber(),
+    items: [],
+    subtotal: 0,
+    taxRate: 25,
+    taxAmount: 0,
+    total: 0,
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    ...data,
+  };
+  quotes.push(quote);
+  return quote;
+}
+
+export async function updateQuote(id, data) {
+  await delay();
+  quotes = quotes.map(q => q.id === id ? { ...q, ...data } : q);
+  return quotes.find(q => q.id === id);
+}
+
+export async function deleteQuote(id) {
+  await delay();
+  quotes = quotes.filter(q => q.id !== id);
 }

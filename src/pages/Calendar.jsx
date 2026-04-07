@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getJobs, getEmployees } from '../db';
 import { StatusBadge, Card } from '../components/ui';
 import { getStatus, JOB_STATUSES } from '../utils/constants';
+import { useRole } from '../context/RoleContext';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -32,6 +33,8 @@ export default function Calendar() {
   const [crewFilter, setCrewFilter] = useState([]); // [] = all, or array of employee ids
   const [crewOpen, setCrewOpen] = useState(false);
   const navigate = useNavigate();
+  const { role } = useRole();
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     Promise.all([getJobs(), getEmployees()]).then(([j, e]) => { setJobs(j); setEmployees(e); });
@@ -270,7 +273,7 @@ export default function Calendar() {
                           {crewFilter.length > 0 && crewFilter.length === 1 && selectedCrewMembers[0] && (
                             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: selectedCrewMembers[0].color }} />
                           )}
-                          <span className="truncate">{j.title}</span>
+                          <span className="truncate">{j.contactName}{j.referenceNumber ? ` · ${j.referenceNumber}` : ''}</span>
                         </div>
                       );
                     })}
@@ -321,7 +324,7 @@ export default function Calendar() {
                         className="mb-1.5 p-2 rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
                         style={{ background: st.bg, borderLeft: `3px solid ${st.color}` }}
                       >
-                        <p className="text-[10px] font-bold truncate" style={{ color: st.color }}>{j.title}</p>
+                        <p className="text-[10px] font-bold truncate" style={{ color: st.color }}>{j.contactName}{j.referenceNumber ? ` · ${j.referenceNumber}` : ''}</p>
                         {j.startTime && <p className="text-[9px] text-[#9E9E98] font-mono mt-0.5">{j.startTime}</p>}
                         {team.length > 0 && (
                           <div className="flex -space-x-1 mt-1.5">
@@ -355,12 +358,14 @@ export default function Calendar() {
             </h3>
             <button onClick={() => setSelected(null)} className="text-xs text-[#9E9E98] hover:text-[#1A1A18]">✕ Close</button>
           </div>
-          <button
-            onClick={() => navigate('/jobs/new', { state: { startDate: selected } })}
-            className="w-full flex items-center justify-center gap-2 mb-3 px-4 py-2.5 rounded-xl bg-[#E8611A] text-white text-sm font-semibold hover:bg-[#C44E10] transition-colors shadow-sm"
-          >
-            + Add Job
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => navigate('/jobs/new', { state: { startDate: selected } })}
+              className="w-full flex items-center justify-center gap-2 mb-3 px-4 py-2.5 rounded-xl bg-[#E8611A] text-white text-sm font-semibold hover:bg-[#C44E10] transition-colors shadow-sm"
+            >
+              + Add Job
+            </button>
+          )}
           {selectedJobs.length === 0 ? (
             <Card className="p-6 text-center">
               <p className="text-[#9E9E98] text-sm">No matching jobs on this day</p>
@@ -382,7 +387,7 @@ export default function Calendar() {
                           <StatusBadge status={job.status} size="sm" />
                           {job.startTime && <span className="text-xs text-[#9E9E98] font-mono">{job.startTime}</span>}
                         </div>
-                        <p className="font-semibold text-sm text-[#1A1A18]">{job.title}</p>
+                        <p className="font-semibold text-sm text-[#1A1A18]">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</p>
                         {job.address && <p className="text-xs text-[#9E9E98] mt-0.5">📍 {job.address}</p>}
                       </div>
                       <div className="flex -space-x-1.5 flex-shrink-0">

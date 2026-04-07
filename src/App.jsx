@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import JobsList from './pages/JobsList';
@@ -7,6 +7,16 @@ import JobDetail from './pages/JobDetail';
 import JobForm from './pages/JobForm';
 import Employees from './pages/Employees';
 import Calendar from './pages/Calendar';
+import QuotesList from './pages/QuotesList';
+import QuoteDetail from './pages/QuoteDetail';
+import QuoteForm from './pages/QuoteForm';
+import { RoleProvider, useRole } from './context/RoleContext';
+
+function AdminRoute({ children }) {
+  const { role } = useRole();
+  if (role !== 'admin') return <Navigate to="/calendar" replace />;
+  return children;
+}
 
 function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,12 +38,16 @@ function Layout() {
           </button>
         </div>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<AdminRoute><Dashboard /></AdminRoute>} />
           <Route path="/jobs" element={<JobsList />} />
-          <Route path="/jobs/new" element={<JobForm />} />
+          <Route path="/jobs/new" element={<AdminRoute><JobForm /></AdminRoute>} />
           <Route path="/jobs/:id" element={<JobDetail />} />
-          <Route path="/jobs/:id/edit" element={<JobForm />} />
-          <Route path="/employees" element={<Employees />} />
+          <Route path="/jobs/:id/edit" element={<AdminRoute><JobForm /></AdminRoute>} />
+          <Route path="/quotes" element={<AdminRoute><QuotesList /></AdminRoute>} />
+          <Route path="/quotes/new" element={<AdminRoute><QuoteForm /></AdminRoute>} />
+          <Route path="/quotes/:id" element={<AdminRoute><QuoteDetail /></AdminRoute>} />
+          <Route path="/quotes/:id/edit" element={<AdminRoute><QuoteForm /></AdminRoute>} />
+          <Route path="/employees" element={<AdminRoute><Employees /></AdminRoute>} />
           <Route path="/calendar" element={<Calendar />} />
         </Routes>
       </main>
@@ -44,7 +58,9 @@ function Layout() {
 export default function App() {
   return (
     <BrowserRouter basename="/ant">
-      <Layout />
+      <RoleProvider>
+        <Layout />
+      </RoleProvider>
     </BrowserRouter>
   );
 }

@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getJob, getEmployees, updateJob, deleteJob } from '../db';
+import { getJob, getEmployees, updateJob, deleteJob, getQuotes } from '../db';
 import { StatusBadge, Card, Button, Avatar, Modal } from '../components/ui';
 import { formatDate, JOB_STATUSES, getStatus } from '../utils/constants';
+import { useRole } from '../context/RoleContext';
 
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role } = useRole();
+  const isAdmin = role === 'admin';
   const [job, setJob] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [jobQuote, setJobQuote] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function load() {
-    const [j, e] = await Promise.all([getJob(id), getEmployees()]);
+    const [j, e, allQuotes] = await Promise.all([getJob(id), getEmployees(), getQuotes()]);
     if (!j) { navigate('/jobs'); return; }
     setJob(j); setEmployees(e);
+    setJobQuote(allQuotes.find(q => q.jobId === id) || null);
   }
 
   useEffect(() => { load(); }, [id]);
@@ -45,8 +50,8 @@ export default function JobDetail() {
       </style></head><body>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
           <div>
-            <div style="font-size:11px;color:#9E9E98;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em">JOB REPORT</div>
-            <h1>${job.title}</h1>
+            <div style="font-size:11px;color:#9E9E98;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em">JOB REPORT${job.referenceNumber ? ' — ' + job.referenceNumber : ''}</div>
+            <h1>${job.contactName || 'Unnamed Job'}</h1>
             <div style="margin-top:8px"><span class="badge">${s.label}</span></div>
           </div>
           <div style="text-align:right;font-size:12px;color:#9E9E98">
@@ -62,12 +67,12 @@ export default function JobDetail() {
           ${job.endDate ? `<div class="row"><span class="label">End</span><span>${formatDate(job.endDate)}${job.endTime ? ' ' + job.endTime : ''}</span></div>` : ''}
           ${job.notes ? `<div class="row"><span class="label">Notes</span><span>${job.notes}</span></div>` : ''}
         </div>
-        ${(job.clientName || job.clientPhone || job.clientEmail) ? `
+        ${(job.contactName || job.contactPhone || job.contactEmail) ? `
         <div class="section">
-          <h2>Client Contact</h2>
-          ${job.clientName ? `<div class="row"><span class="label">Name</span><span>${job.clientName}</span></div>` : ''}
-          ${job.clientPhone ? `<div class="row"><span class="label">Phone</span><span>${job.clientPhone}</span></div>` : ''}
-          ${job.clientEmail ? `<div class="row"><span class="label">Email</span><span>${job.clientEmail}</span></div>` : ''}
+          <h2>Contact</h2>
+          ${job.contactName ? `<div class="row"><span class="label">Name</span><span>${job.contactName}</span></div>` : ''}
+          ${job.contactPhone ? `<div class="row"><span class="label">Phone</span><span>${job.contactPhone}</span></div>` : ''}
+          ${job.contactEmail ? `<div class="row"><span class="label">Email</span><span>${job.contactEmail}</span></div>` : ''}
         </div>` : ''}
         ${team.length ? `
         <div class="section">
@@ -102,30 +107,36 @@ export default function JobDetail() {
         </button>
         <div className="flex-1 min-w-0">
           <StatusBadge status={job.status} />
-          <h1 className="text-xl font-bold text-[#1A1A18] mt-1">{job.title}</h1>
+          <h1 className="text-xl font-bold text-[#1A1A18] mt-1">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</h1>
           <p className="text-sm text-[#9E9E98]">📍 {job.address}</p>
         </div>
-        <div className="flex gap-2 flex-shrink-0">
-          <Button variant="secondary" size="sm" onClick={exportPDF}>📄 PDF</Button>
-          <Button variant="secondary" size="sm" onClick={() => navigate(`/jobs/${id}/edit`)}>✏️ Edit</Button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 flex-shrink-0">
+            <Button variant="secondary" size="sm" onClick={exportPDF}>📄 PDF</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate(`/jobs/${id}/edit`)}>✏️ Edit</Button>
+          </div>
+        )}
       </div>
 
       {/* Status Changer */}
       <Card className="p-4">
         <h2 className="font-semibold text-sm text-[#1A1A18] mb-3">Job Status</h2>
-        <select
-          value={job.status}
-          onChange={e => changeStatus(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl border border-[#E0DED8] bg-white text-sm font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E8611A]/30"
-          style={{ color: s.color }}
-        >
-          {JOB_STATUSES.map(st => (
-            <option key={st.value} value={st.value} style={{ color: st.color }}>
-              {st.label}
-            </option>
-          ))}
-        </select>
+        {isAdmin ? (
+          <select
+            value={job.status}
+            onChange={e => changeStatus(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border border-[#E0DED8] bg-white text-sm font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E8611A]/30"
+            style={{ color: s.color }}
+          >
+            {JOB_STATUSES.map(st => (
+              <option key={st.value} value={st.value} style={{ color: st.color }}>
+                {st.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <StatusBadge status={job.status} />
+        )}
       </Card>
 
       {/* Details */}
@@ -146,17 +157,38 @@ export default function JobDetail() {
           </div>
         </Card>
 
-        {(job.clientName || job.clientPhone || job.clientEmail) && (
+        {(job.contactName || job.contactPhone || job.contactEmail) && (
           <Card className="p-4">
-            <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Client</h2>
+            <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Contact</h2>
             <div className="space-y-1.5 text-sm">
-              {job.clientName && <p className="font-semibold text-[#1A1A18]">{job.clientName}</p>}
-              {job.clientPhone && <a href={`tel:${job.clientPhone}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A]">📞 {job.clientPhone}</a>}
-              {job.clientEmail && <a href={`mailto:${job.clientEmail}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A] truncate">✉️ {job.clientEmail}</a>}
+              {job.contactName && <p className="font-semibold text-[#1A1A18]">{job.contactName}</p>}
+              {job.contactPhone && <a href={`tel:${job.contactPhone}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A]">📞 {job.contactPhone}</a>}
+              {job.contactEmail && <a href={`mailto:${job.contactEmail}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A] truncate">✉️ {job.contactEmail}</a>}
             </div>
           </Card>
         )}
       </div>
+
+      {/* Quote */}
+      {isAdmin && (
+        jobQuote ? (
+          <Button
+            variant="secondary"
+            onClick={() => navigate(`/quotes/${jobQuote.id}`)}
+            className="w-full justify-center"
+          >
+            📝 Go to Quote {jobQuote.quoteNumber}
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/quotes/new', { state: { fromJobId: job.id } })}
+            className="w-full justify-center"
+          >
+            📝 Create Quote from this Job
+          </Button>
+        )
+      )}
 
       {/* Description */}
       {job.description && (
@@ -178,7 +210,7 @@ export default function JobDetail() {
       <Card className="p-4">
         <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Team ({team.length})</h2>
         {team.length === 0 ? (
-          <p className="text-sm text-[#9E9E98]">No team assigned yet. <button onClick={() => navigate(`/jobs/${id}/edit`)} className="text-[#E8611A] font-medium">Edit job</button></p>
+          <p className="text-sm text-[#9E9E98]">No team assigned yet.{isAdmin && <> <button onClick={() => navigate(`/jobs/${id}/edit`)} className="text-[#E8611A] font-medium">Edit job</button></>}</p>
         ) : (
           <div className="space-y-2">
             {team.map(emp => (
@@ -233,17 +265,21 @@ export default function JobDetail() {
       )}
 
       {/* Delete */}
-      <div className="pb-8">
-        <Button variant="danger" onClick={() => setConfirmDelete(true)} className="w-full">🗑 Delete Job</Button>
-      </div>
+      {isAdmin && (
+        <>
+          <div className="pb-8">
+            <Button variant="danger" onClick={() => setConfirmDelete(true)} className="w-full">🗑 Delete Job</Button>
+          </div>
 
-      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete Job">
-        <p className="text-sm text-[#6B6B66] mb-5">Are you sure you want to delete <strong>{job.title}</strong>? This cannot be undone.</p>
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => setConfirmDelete(false)} className="flex-1">Cancel</Button>
-          <Button variant="danger" onClick={handleDelete} className="flex-1">Delete</Button>
-        </div>
-      </Modal>
+          <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete Job">
+            <p className="text-sm text-[#6B6B66] mb-5">Are you sure you want to delete <strong>{job.contactName}{job.referenceNumber ? ` (${job.referenceNumber})` : ''}</strong>? This cannot be undone.</p>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)} className="flex-1">Cancel</Button>
+              <Button variant="danger" onClick={handleDelete} className="flex-1">Delete</Button>
+            </div>
+          </Modal>
+        </>
+      )}
     </div>
   );
 }

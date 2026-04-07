@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { createJob, updateJob, getJob, getEmployees } from '../db';
+import { createJob, updateJob, getJob, getEmployees, generateReferenceNumber } from '../db';
 import { Button, Input, Textarea, Card, Avatar } from '../components/ui';
 import { JOB_STATUSES } from '../utils/constants';
 import { v4 as uuidv4 } from 'uuid';
 
 const EMPTY = {
   jobPhone: '',
-  title: '',
+  referenceNumber: '',
   description: '',
   status: 'new',
   // Client
   contactName: '',
+  contactPhone: '',
+  contactEmail: '',
   address: '',
   primaryFirstName: '',
   primaryLastName: '',
@@ -41,7 +43,7 @@ export default function JobForm() {
   const location = useLocation();
   const isEdit = Boolean(id);
   const initialDate = location.state?.startDate || '';
-  const [form, setForm] = useState({ ...EMPTY, startDate: initialDate });
+  const [form, setForm] = useState({ ...EMPTY, startDate: initialDate, referenceNumber: generateReferenceNumber() });
   const [employees, setEmployees] = useState([]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -59,7 +61,8 @@ export default function JobForm() {
 
   function validate() {
     const e = {};
-    if (!form.title.trim()) e.title = 'Job title is required';
+    if (!form.referenceNumber.trim()) e.referenceNumber = 'Reference number is required';
+    if (!form.contactName.trim()) e.contactName = 'Contact name is required';
     if (!form.address.trim()) e.address = 'Job site address is required';
     if (!form.startDate) e.startDate = 'Start date is required';
     setErrors(e);
@@ -69,7 +72,8 @@ export default function JobForm() {
   async function handleSave() {
     if (!validate()) {
       // Jump to the step that has the first error
-      if (errors.title || errors.address) setStep(null);
+      if (errors.referenceNumber) setStep(null);
+      else if (errors.contactName || errors.address) setStep('details');
       else if (errors.startDate) setStep('schedule');
       return;
     }
@@ -166,7 +170,7 @@ export default function JobForm() {
 
   if (step === 'details') return (
     <StepShell title="Contact & Job Details" onBack={() => setStep(null)} onNext={() => setStep(nextStep?.id)} nextLabel={nextStep?.label} step={stepIdx + 1} total={STEPS.length}>
-      <Input label="Contact Name" placeholder="Business or person's name" value={form.contactName} onChange={e => set('contactName', e.target.value)} />
+      <Input label="Contact Name *" placeholder="Business or person's name" value={form.contactName} onChange={e => set('contactName', e.target.value)} error={errors.contactName} />
       <Textarea label="Job Site Address *" placeholder="123 Main St, City, State ZIP" value={form.address} onChange={e => set('address', e.target.value)} error={errors.address} rows={3} />
       <div>
         <label className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide block mb-2">Primary Person</label>
@@ -331,7 +335,7 @@ export default function JobForm() {
         />
       </div>
 
-      {/* Status + Job Title */}
+      {/* Status + Reference Number */}
       <Card className="p-5 space-y-4">
         <div>
           <label className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide block mb-1.5">Status</label>
@@ -347,11 +351,11 @@ export default function JobForm() {
           </select>
         </div>
         <Input
-          label="Job Title *"
-          placeholder="e.g. Driveway Resurfacing"
-          value={form.title}
-          onChange={e => set('title', e.target.value)}
-          error={errors.title}
+          label="Job Reference Number *"
+          placeholder="e.g. JOB-0001"
+          value={form.referenceNumber}
+          onChange={e => set('referenceNumber', e.target.value)}
+          error={errors.referenceNumber}
         />
       </Card>
 

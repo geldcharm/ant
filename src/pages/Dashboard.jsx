@@ -14,9 +14,14 @@ export default function Dashboard() {
   }, []);
 
   const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
   const upcoming = jobs.filter(j => j.startDate >= today && j.status !== 'done').slice(0, 5);
   const counts = JOB_STATUSES.map(s => ({ ...s, count: jobs.filter(j => j.status === s.value).length }));
-  const activeCount = jobs.filter(j => !['done'].includes(j.status)).length;
+
+  // Calendar month jobs count
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonthName = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const jobsThisMonth = jobs.filter(j => j.startDate?.startsWith(currentMonthStr)).length;
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-5xl">
@@ -27,23 +32,35 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Jobs', value: jobs.length, icon: '📋', accent: '#E8611A' },
-          { label: 'Active Jobs', value: activeCount, icon: '🔧', accent: '#6366F1' },
-          { label: 'Team Members', value: employees.length, icon: '👥', accent: '#10B981' },
-          { label: 'Completed', value: counts.find(c=>c.value==='done')?.count||0, icon: '✅', accent: '#059669' },
-        ].map(s => (
-          <Card key={s.label} className="p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-[#9E9E98] font-medium">{s.label}</p>
-                <p className="text-3xl font-bold mt-1" style={{ color: s.accent }}>{s.value}</p>
-              </div>
-              <span className="text-2xl">{s.icon}</span>
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-[#9E9E98] font-medium">Total Jobs</p>
+              <p className="text-3xl font-bold mt-1" style={{ color: '#E8611A' }}>{jobs.length}</p>
             </div>
-          </Card>
-        ))}
+            <span className="text-2xl">📋</span>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-[#9E9E98] font-medium">Team Members</p>
+              <p className="text-3xl font-bold mt-1" style={{ color: '#10B981' }}>{employees.length}</p>
+            </div>
+            <span className="text-2xl">👥</span>
+          </div>
+        </Card>
+        <Card className="p-4 cursor-pointer hover:shadow-sm transition-shadow" onClick={() => navigate('/calendar')}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-[#9E9E98] font-medium">{currentMonthName}</p>
+              <p className="text-3xl font-bold mt-1" style={{ color: '#6366F1' }}>{jobsThisMonth}</p>
+              <p className="text-[10px] text-[#9E9E98] mt-0.5">job{jobsThisMonth !== 1 ? 's' : ''} this month</p>
+            </div>
+            <span className="text-2xl">📅</span>
+          </div>
+        </Card>
       </div>
 
       {/* Status breakdown */}
@@ -53,7 +70,7 @@ export default function Dashboard() {
           {counts.map(s => (
             <button
               key={s.value}
-              onClick={() => navigate('/jobs')}
+              onClick={() => navigate('/jobs', { state: { statusFilter: s.value } })}
               className="flex items-center gap-2 px-3 py-2 rounded-xl border transition-all hover:shadow-sm"
               style={{ borderColor: s.color + '30', background: s.bg }}
             >
@@ -84,7 +101,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <StatusBadge status={job.status} size="sm" />
                   </div>
-                  <p className="font-semibold text-sm text-[#1A1A18] truncate">{job.title}</p>
+                  <p className="font-semibold text-sm text-[#1A1A18] truncate">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</p>
                   <p className="text-xs text-[#9E9E98] mt-0.5">{formatDate(job.startDate)} · {job.address}</p>
                 </div>
                 <div className="flex -space-x-2 flex-shrink-0">

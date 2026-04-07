@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getJobs, getEmployees } from '../db';
 import { StatusBadge, Card, Button, EmptyState } from '../components/ui';
 import { formatDate, JOB_STATUSES } from '../utils/constants';
+import { useRole } from '../context/RoleContext';
 
 export default function JobsList() {
   const [jobs, setJobs] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [filter, setFilter] = useState('all');
+  const location = useLocation();
+  const [filter, setFilter] = useState(location.state?.statusFilter || 'all');
   const [search, setSearch] = useState('');
+  const [monthFilter, setMonthFilter] = useState('all');
   const navigate = useNavigate();
+  const { role } = useRole();
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     Promise.all([getJobs(), getEmployees()]).then(([j, e]) => { setJobs(j); setEmployees(e); });
@@ -17,8 +22,9 @@ export default function JobsList() {
 
   const filtered = jobs.filter(j => {
     const matchStatus = filter === 'all' || j.status === filter;
-    const matchSearch = !search || j.title.toLowerCase().includes(search.toLowerCase()) || j.address?.toLowerCase().includes(search.toLowerCase()) || j.clientName?.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch;
+    const matchSearch = !search || j.referenceNumber?.toLowerCase().includes(search.toLowerCase()) || j.contactName?.toLowerCase().includes(search.toLowerCase()) || j.address?.toLowerCase().includes(search.toLowerCase());
+    const matchMonth = monthFilter === 'all' || j.startDate?.startsWith(monthFilter);
+    return matchStatus && matchSearch && matchMonth;
   }).sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
 
   function getTeam(job) {
@@ -30,18 +36,37 @@ export default function JobsList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#1A1A18]">Jobs</h1>
-        <Button variant="primary" onClick={() => navigate('/jobs/new')}>+ New Job</Button>
+        {isAdmin && <Button variant="primary" onClick={() => navigate('/jobs/new')}>+ New Job</Button>}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9E9E98]">🔍</span>
-        <input
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#E0DED8] bg-white text-sm outline-none focus:border-[#E8611A] focus:ring-2 focus:ring-[#E8611A]/10 transition-all"
-          placeholder="Search jobs, addresses, clients..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      {/* Search + Month filter */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9E9E98]">🔍</span>
+          <input
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#E0DED8] bg-white text-sm outline-none focus:border-[#E8611A] focus:ring-2 focus:ring-[#E8611A]/10 transition-all"
+            placeholder="Search jobs, addresses, clients..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          value={monthFilter}
+          onChange={e => setMonthFilter(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-[#E0DED8] bg-white text-sm font-medium text-[#1A1A18] appearance-none cursor-pointer focus:outline-none focus:border-[#E8611A] focus:ring-2 focus:ring-[#E8611A]/10 transition-all pr-8"
+          style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239E9E98' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
+        >
+          <option value="all">All months</option>
+          {(() => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return months.map((m, i) => {
+              const val = `${year}-${String(i + 1).padStart(2, '0')}`;
+              return <option key={val} value={val}>{m} {year}</option>;
+            });
+          })()}
+        </select>
       </div>
 
       {/* Status Filters */}
@@ -75,7 +100,7 @@ export default function JobsList() {
           icon="📋"
           title="No jobs found"
           subtitle={search ? 'Try a different search term' : 'Create your first job to get started'}
-          action={!search && <Button variant="primary" onClick={() => navigate('/jobs/new')}>+ New Job</Button>}
+          action={!search && isAdmin && <Button variant="primary" onClick={() => navigate('/jobs/new')}>+ New Job</Button>}
         />
       ) : (
         <div className="space-y-2">
@@ -96,9 +121,8 @@ export default function JobsList() {
                         <span className="text-xs text-[#9E9E98] mono">{formatDate(job.startDate)}</span>
                       )}
                     </div>
-                    <h3 className="font-semibold text-[#1A1A18] text-sm">{job.title}</h3>
+                    <h3 className="font-semibold text-[#1A1A18] text-sm">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</h3>
                     {job.address && <p className="text-xs text-[#9E9E98] mt-0.5 truncate">📍 {job.address}</p>}
-                    {job.clientName && <p className="text-xs text-[#9E9E98] truncate">👤 {job.clientName}</p>}
                     {job.description && (
                       <p className="text-xs text-[#9E9E98] mt-1 line-clamp-2">{job.description}</p>
                     )}
