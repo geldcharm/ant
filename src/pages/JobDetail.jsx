@@ -142,7 +142,7 @@ export default function JobDetail() {
       {/* Details */}
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="p-4">
-          <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Schedule</h2>
+          <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Calendar</h2>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[#9E9E98]">Start</span>

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getJobs, getEmployees } from '../db';
-import { StatusBadge, Card, Button, EmptyState } from '../components/ui';
+import { StatusBadge, Card, Button, EmptyState, BackButton } from '../components/ui';
 import { formatDate, JOB_STATUSES } from '../utils/constants';
 import { useRole } from '../context/RoleContext';
 
 export default function JobsList() {
   const [jobs, setJobs] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
   const location = useLocation();
   const [filter, setFilter] = useState(location.state?.statusFilter || 'all');
   const [search, setSearch] = useState('');
@@ -17,7 +18,7 @@ export default function JobsList() {
   const isAdmin = role === 'admin';
 
   useEffect(() => {
-    Promise.all([getJobs(), getEmployees()]).then(([j, e]) => { setJobs(j); setEmployees(e); });
+    Promise.all([getJobs(), getEmployees()]).then(([j, e]) => { setJobs(j); setEmployees(e); setLoading(false); });
   }, []);
 
   const filtered = jobs.filter(j => {
@@ -34,8 +35,11 @@ export default function JobsList() {
   return (
     <div className="p-5 md:p-8 space-y-5 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#1A1A18]">Jobs</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <h1 className="text-2xl font-bold text-[#1A1A18]">Jobs</h1>
+        </div>
         {isAdmin && <Button variant="primary" onClick={() => navigate('/jobs/new')}>+ New Job</Button>}
       </div>
 
@@ -95,7 +99,11 @@ export default function JobsList() {
       </div>
 
       {/* List */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="space-y-2">
+          {[1,2,3].map(i => <div key={i} className="h-20 rounded-2xl bg-[#F5F4F0] animate-pulse" />)}
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon="📋"
           title="No jobs found"

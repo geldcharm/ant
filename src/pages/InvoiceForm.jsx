@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { createQuote, updateQuote, getQuote, getJob, generateQuoteNumber } from '../db';
-import { Button, Input, Textarea, Card } from '../components/ui';
-import { QUOTE_STATUSES, TRADE_TYPES, TAX_OPTIONS, PAYMENT_TERMS } from '../utils/constants';
+import { createInvoice, updateInvoice, getInvoice, getJob, getQuote, generateInvoiceNumber } from '../db';
+import { Button, Card, BackButton } from '../components/ui';
+import { INVOICE_STATUSES, TAX_OPTIONS, PAYMENT_TERMS } from '../utils/constants';
 import { v4 as uuidv4 } from 'uuid';
 
 const EMPTY_ITEM = () => ({ id: uuidv4(), item: '', description: '', quantity: 1, unitPrice: 0, discountPercent: 0, tax: 'GST (15%)', amount: 0 });
@@ -28,57 +28,79 @@ function calcTotals(items) {
 }
 
 const EMPTY = {
-  quoteNumber: '',
+  invoiceNumber: '',
   jobId: '',
   jobRef: '',
+  quoteId: '',
   date: new Date().toISOString().split('T')[0],
-  validUntil: '',
+  dueDate: '',
   status: 'draft',
-  // Client
   contactName: '',
   clientAddress: '',
   clientSuburb: '',
   clientCountry: '',
-  // Business
   businessName: '',
   businessAddress: '',
   businessSuburb: '',
   businessPhone: '',
   businessEmail: '',
   businessAbn: '',
-  // Trade
-  tradeType: '',
-  licenceNo: '',
-  // Items
   items: [EMPTY_ITEM()],
   subtotal: 0,
   gstAmount: 0,
   total: 0,
-  // Footer
   notes: '',
-  paymentTerms: '50% deposit, balance on completion',
+  paymentTerms: 'Net 14 days',
   bankName: '',
   bankBsb: '',
   bankAccount: '',
-  // Logo
   logo: '',
 };
 
-export default function QuoteForm() {
+export default function InvoiceForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const isEdit = Boolean(id);
   const fromJobId = location.state?.fromJobId;
+  const fromQuoteId = location.state?.fromQuoteId;
   const logoRef = useRef();
 
-  const [form, setForm] = useState({ ...EMPTY, quoteNumber: generateQuoteNumber() });
+  const [form, setForm] = useState({ ...EMPTY, invoiceNumber: generateInvoiceNumber() });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isEdit) {
-      getQuote(id).then(q => q && setForm({ ...EMPTY, ...q }));
+      getInvoice(id).then(inv => inv && setForm({ ...EMPTY, ...inv }));
+    } else if (fromQuoteId) {
+      getQuote(fromQuoteId).then(q => {
+        if (!q) return;
+        setForm(f => ({
+          ...f,
+          quoteId: q.id,
+          jobId: q.jobId || '',
+          jobRef: q.jobRef || '',
+          contactName: q.contactName || '',
+          clientAddress: q.clientAddress || '',
+          clientSuburb: q.clientSuburb || '',
+          clientCountry: q.clientCountry || '',
+          businessName: q.businessName || '',
+          businessAddress: q.businessAddress || '',
+          businessSuburb: q.businessSuburb || '',
+          businessPhone: q.businessPhone || '',
+          businessEmail: q.businessEmail || '',
+          businessAbn: q.businessAbn || '',
+          items: q.items?.map(i => ({ ...i, id: uuidv4() })) || [EMPTY_ITEM()],
+          subtotal: q.subtotal || 0,
+          gstAmount: q.gstAmount || 0,
+          total: q.total || 0,
+          bankName: q.bankName || '',
+          bankBsb: q.bankBsb || '',
+          bankAccount: q.bankAccount || '',
+          logo: q.logo || '',
+        }));
+      });
     } else if (fromJobId) {
       getJob(fromJobId).then(job => {
         if (!job) return;
@@ -92,7 +114,7 @@ export default function QuoteForm() {
         }));
       });
     }
-  }, [id, fromJobId]);
+  }, [id, fromJobId, fromQuoteId]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -108,8 +130,7 @@ export default function QuoteForm() {
   }
 
   function addItem() {
-    const updated = [...form.items, EMPTY_ITEM()];
-    setForm(f => ({ ...f, items: updated }));
+    setForm(f => ({ ...f, items: [...f.items, EMPTY_ITEM()] }));
   }
 
   function removeItem(itemId) {
@@ -130,7 +151,7 @@ export default function QuoteForm() {
   function validate() {
     const e = {};
     if (!form.contactName.trim()) e.contactName = 'Client name is required';
-    if (!form.quoteNumber.trim()) e.quoteNumber = 'Quote number is required';
+    if (!form.invoiceNumber.trim()) e.invoiceNumber = 'Invoice number is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -140,35 +161,31 @@ export default function QuoteForm() {
     setSaving(true);
     try {
       if (isEdit) {
-        await updateQuote(id, form);
-        navigate(`/quotes/${id}`);
+        await updateInvoice(id, form);
+        navigate(`/invoices/${id}`);
       } else {
-        const q = await createQuote(form);
-        navigate(`/quotes/${q.id}`, { replace: true });
+        const inv = await createInvoice(form);
+        navigate(`/invoices/${inv.id}`, { replace: true });
       }
     } finally {
       setSaving(false);
     }
   }
 
-  const currentStatus = QUOTE_STATUSES.find(s => s.value === form.status) || QUOTE_STATUSES[0];
+  const currentStatus = INVOICE_STATUSES.find(s => s.value === form.status) || INVOICE_STATUSES[0];
   const fmt = v => (v || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div className="p-5 md:p-8 max-w-4xl space-y-5 pb-12">
-      {/* Top bar */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl bg-white border border-[#E0DED8] flex items-center justify-center text-[#6B6B66] hover:bg-[#F5F4F0] transition-colors">←</button>
+        <BackButton />
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-[#1A1A18]">{isEdit ? 'Edit Quote' : 'New Quote'}</h1>
+          <h1 className="text-xl font-bold text-[#1A1A18]">{isEdit ? 'Edit Invoice' : 'New Invoice'}</h1>
           {form.jobRef && <p className="text-xs text-[#E8611A] mt-0.5">From job {form.jobRef}</p>}
         </div>
       </div>
 
-      {/* ── Quote Document ───────────────────────── */}
       <Card className="p-6 md:p-8 space-y-6">
-
-        {/* Row 1: Logo + Status */}
         <div className="flex items-start justify-between">
           <div>
             <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={handleLogo} />
@@ -189,18 +206,15 @@ export default function QuoteForm() {
             className="px-3 py-1.5 rounded-lg border text-xs font-bold appearance-none cursor-pointer focus:outline-none"
             style={{ color: currentStatus.color, background: currentStatus.bg, borderColor: currentStatus.color + '30' }}
           >
-            {QUOTE_STATUSES.map(s => (
+            {INVOICE_STATUSES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
         </div>
 
-        {/* QUOTE title */}
-        <h2 className="text-3xl font-black text-[#1A1A18] tracking-tight">QUOTE</h2>
+        <h2 className="text-3xl font-black text-[#1A1A18] tracking-tight">INVOICE</h2>
 
-        {/* Row 2: Client (left) | Dates + QuoteNo (center) | Business (right) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Client details */}
           <div className="space-y-2">
             <input placeholder="Client name" value={form.contactName} onChange={e => set('contactName', e.target.value)}
               className={`w-full px-0 py-1 border-b text-sm outline-none transition-colors bg-transparent placeholder:text-[#9E9E98] ${errors.contactName ? 'border-red-400' : 'border-[#E0DED8] focus:border-[#E8611A]'}`} />
@@ -213,80 +227,52 @@ export default function QuoteForm() {
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
           </div>
 
-          {/* Dates + Quote number */}
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Date</label>
+              <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Invoice Date</label>
               <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
                 className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Expiry</label>
-              <input type="date" value={form.validUntil} onChange={e => set('validUntil', e.target.value)}
+              <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Due Date</label>
+              <input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)}
                 className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Quote number</label>
-              <input value={form.quoteNumber} onChange={e => set('quoteNumber', e.target.value)}
-                className={`w-full px-0 py-1 border-b text-sm font-semibold outline-none transition-colors bg-transparent ${errors.quoteNumber ? 'border-red-400' : 'border-[#E0DED8] focus:border-[#E8611A]'}`} />
+              <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Invoice Number</label>
+              <input value={form.invoiceNumber} onChange={e => set('invoiceNumber', e.target.value)}
+                className={`w-full px-0 py-1 border-b text-sm font-semibold outline-none transition-colors bg-transparent ${errors.invoiceNumber ? 'border-red-400' : 'border-[#E0DED8] focus:border-[#E8611A]'}`} />
             </div>
           </div>
 
-          {/* Business details */}
           <div className="space-y-2">
-            <input placeholder="Business Name Pty Ltd" value={form.businessName} onChange={e => set('businessName', e.target.value)}
+            <input placeholder="Business Name" value={form.businessName} onChange={e => set('businessName', e.target.value)}
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm font-semibold outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98] placeholder:font-normal" />
-            <input placeholder="Unit/Street address" value={form.businessAddress} onChange={e => set('businessAddress', e.target.value)}
+            <input placeholder="Address" value={form.businessAddress} onChange={e => set('businessAddress', e.target.value)}
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
             <input placeholder="Suburb, State, Postcode" value={form.businessSuburb} onChange={e => set('businessSuburb', e.target.value)}
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
-            <input placeholder="Phone: 04XX XXX XXX" value={form.businessPhone} onChange={e => set('businessPhone', e.target.value)}
+            <input placeholder="Phone" value={form.businessPhone} onChange={e => set('businessPhone', e.target.value)}
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
             <input placeholder="Email" value={form.businessEmail} onChange={e => set('businessEmail', e.target.value)}
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
-            <input placeholder="ABN: XX XXX XXX XXX" value={form.businessAbn} onChange={e => set('businessAbn', e.target.value)}
+            <input placeholder="ABN / Org No." value={form.businessAbn} onChange={e => set('businessAbn', e.target.value)}
               className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
           </div>
         </div>
 
-        {/* Trade type + Licence */}
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Trade type</label>
-            <select value={form.tradeType} onChange={e => set('tradeType', e.target.value)}
-              className="w-full px-0 py-1.5 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent appearance-none cursor-pointer">
-              <option value="">Select trade...</option>
-              {TRADE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide">Licence no.</label>
-            <input placeholder="e.g. PL XXXXX" value={form.licenceNo} onChange={e => set('licenceNo', e.target.value)}
-              className="w-full px-0 py-1 border-b border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
-          </div>
-        </div>
-
-        {/* ── Line Items Table ──────────────────── */}
+        {/* Line Items */}
         <div className="border-t border-[#E0DED8] pt-4">
-          {/* Header */}
           <div className="hidden sm:grid grid-cols-[100px_1fr_55px_80px_55px_90px_80px_28px] gap-1.5 text-[9px] font-bold text-[#6B6B66] uppercase tracking-wider mb-2 px-1">
-            <span>Item</span>
-            <span>Description</span>
-            <span>Qty</span>
-            <span>Unit Price</span>
-            <span>Disc %</span>
-            <span>Tax</span>
-            <span className="text-right">Amount</span>
-            <span />
+            <span>Item</span><span>Description</span><span>Qty</span><span>Unit Price</span><span>Disc %</span><span>Tax</span><span className="text-right">Amount</span><span />
           </div>
 
           {form.items.map((item, idx) => (
             <div key={item.id}>
-              {/* Desktop: inline grid row */}
               <div className="hidden sm:grid grid-cols-[100px_1fr_55px_80px_55px_90px_80px_28px] gap-1.5 items-center mb-2">
                 <input placeholder="e.g. Labour" value={item.item} onChange={e => updateItem(item.id, 'item', e.target.value)}
                   className="w-full px-2 py-1.5 border-b border-dashed border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent placeholder:text-[#9E9E98]" />
-                <input placeholder="" value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
+                <input value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
                   className="w-full px-2 py-1.5 border-b border-dashed border-[#E0DED8] text-sm outline-none focus:border-[#E8611A] transition-colors bg-transparent" />
                 <input type="number" min="0" step="any" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)}
                   className="w-full px-1 py-1.5 border-b border-dashed border-[#E0DED8] text-sm text-center outline-none focus:border-[#E8611A] transition-colors bg-transparent" />
@@ -302,7 +288,6 @@ export default function QuoteForm() {
                 <button onClick={() => removeItem(item.id)} className="w-7 h-7 rounded-lg text-[#9E9E98] hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors text-xs">✕</button>
               </div>
 
-              {/* Mobile: labeled stacked card */}
               <div className="sm:hidden mb-4 p-3 rounded-xl border border-[#E0DED8] bg-[#F9F8F5] space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wide text-[#6B6B66]">Line {idx + 1}</span>
@@ -315,7 +300,7 @@ export default function QuoteForm() {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide block mb-1">Description</label>
-                  <input placeholder="Details" value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
+                  <input value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-[#E0DED8] bg-white text-sm outline-none focus:border-[#E8611A]" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -350,35 +335,22 @@ export default function QuoteForm() {
             </div>
           ))}
 
-          <button onClick={addItem} className="text-sm text-[#E8611A] font-medium mt-2 hover:underline">
-            + Add a line
-          </button>
+          <button onClick={addItem} className="text-sm text-[#E8611A] font-medium mt-2 hover:underline">+ Add a line</button>
         </div>
 
-        {/* ── Totals ────────────────────────────── */}
         <div className="flex justify-end">
           <div className="w-64 space-y-2 border-t border-[#E0DED8] pt-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-[#6B6B66]">Subtotal</span>
-              <span className="font-semibold text-[#E8611A]">${fmt(form.subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-[#6B6B66]">GST</span>
-              <span className="font-semibold text-[#E8611A]">${fmt(form.gstAmount)}</span>
-            </div>
-            <div className="flex justify-between text-base font-bold pt-2 border-t border-[#E0DED8]">
-              <span>Total AUD</span>
-              <span>${fmt(form.total)}</span>
-            </div>
+            <div className="flex justify-between text-sm"><span className="text-[#6B6B66]">Subtotal</span><span className="font-semibold text-[#E8611A]">${fmt(form.subtotal)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-[#6B6B66]">GST</span><span className="font-semibold text-[#E8611A]">${fmt(form.gstAmount)}</span></div>
+            <div className="flex justify-between text-base font-bold pt-2 border-t border-[#E0DED8]"><span>Total AUD</span><span>${fmt(form.total)}</span></div>
           </div>
         </div>
 
-        {/* ── Terms, Payment, Bank ──────────────── */}
         <div className="border-t border-[#E0DED8] pt-5 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide block mb-1.5">Terms & Notes</label>
+            <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide block mb-1.5">Notes</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={4}
-              placeholder="e.g. Quote valid for 30 days. 50% deposit required. All work guaranteed 12 months."
+              placeholder="e.g. Payment due within 14 days. Late payments incur 2% monthly fee."
               className="w-full px-3 py-2.5 rounded-xl border border-dashed border-[#E0DED8] bg-transparent text-sm outline-none focus:border-[#E8611A] transition-colors placeholder:text-[#9E9E98] placeholder:italic resize-none" />
           </div>
           <div className="space-y-3">
@@ -402,11 +374,10 @@ export default function QuoteForm() {
         </div>
       </Card>
 
-      {/* Actions */}
       <div className="flex gap-3">
         <Button variant="secondary" onClick={() => navigate(-1)} className="flex-1">Cancel</Button>
         <Button variant="primary" onClick={handleSave} disabled={saving} className="flex-1">
-          {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Quote'}
+          {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Invoice'}
         </Button>
       </div>
     </div>

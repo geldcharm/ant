@@ -10,6 +10,10 @@ import Calendar from './pages/Calendar';
 import QuotesList from './pages/QuotesList';
 import QuoteDetail from './pages/QuoteDetail';
 import QuoteForm from './pages/QuoteForm';
+import InvoicesList from './pages/InvoicesList';
+import InvoiceForm from './pages/InvoiceForm';
+import InvoiceDetail from './pages/InvoiceDetail';
+import TimeSheet from './pages/TimeSheet';
 import { RoleProvider, useRole } from './context/RoleContext';
 
 function AdminRoute({ children }) {
@@ -47,6 +51,11 @@ function Layout() {
           <Route path="/quotes/new" element={<AdminRoute><QuoteForm /></AdminRoute>} />
           <Route path="/quotes/:id" element={<AdminRoute><QuoteDetail /></AdminRoute>} />
           <Route path="/quotes/:id/edit" element={<AdminRoute><QuoteForm /></AdminRoute>} />
+          <Route path="/invoices" element={<AdminRoute><InvoicesList /></AdminRoute>} />
+          <Route path="/invoices/new" element={<AdminRoute><InvoiceForm /></AdminRoute>} />
+          <Route path="/invoices/:id" element={<AdminRoute><InvoiceDetail /></AdminRoute>} />
+          <Route path="/invoices/:id/edit" element={<AdminRoute><InvoiceForm /></AdminRoute>} />
+          <Route path="/timesheet" element={<AdminRoute><TimeSheet /></AdminRoute>} />
           <Route path="/employees" element={<AdminRoute><Employees /></AdminRoute>} />
           <Route path="/calendar" element={<Calendar />} />
         </Routes>

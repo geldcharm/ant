@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../db';
-import { Avatar, Card, Button, Input, Select, Modal, EmptyState } from '../components/ui';
+import { Avatar, Card, Button, Input, Select, Modal, EmptyState, BackButton } from '../components/ui';
+import { ROSTER_DAYS, formatRoster } from '../utils/constants';
 
 const ROLES = ['Foreman', 'Operator', 'Laborer', 'Driver', 'Supervisor'];
-const EMPTY_EMP = { name: '', role: 'Laborer', phone: '', email: '' };
+const DEFAULT_ROSTER = { days: ['mon','tue','wed','thu','fri'], startTime: '07:00', endTime: '16:00' };
+const EMPTY_EMP = { name: '', role: 'Laborer', phone: '', email: '', roster: { ...DEFAULT_ROSTER } };
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
@@ -16,8 +18,28 @@ export default function Employees() {
   async function load() { setEmployees(await getEmployees()); }
   useEffect(() => { load(); }, []);
 
-  function openCreate() { setForm(EMPTY_EMP); setEditEmp(null); setShowModal(true); }
-  function openEdit(emp) { setForm({ name: emp.name, role: emp.role, phone: emp.phone, email: emp.email }); setEditEmp(emp); setShowModal(true); }
+  function openCreate() { setForm({ ...EMPTY_EMP, roster: { ...DEFAULT_ROSTER } }); setEditEmp(null); setShowModal(true); }
+  function openEdit(emp) {
+    setForm({
+      name: emp.name,
+      role: emp.role,
+      phone: emp.phone,
+      email: emp.email,
+      roster: emp.roster ? { ...emp.roster, days: [...(emp.roster.days || [])] } : { ...DEFAULT_ROSTER },
+    });
+    setEditEmp(emp); setShowModal(true);
+  }
+
+  function toggleRosterDay(day) {
+    setForm(f => {
+      const days = f.roster?.days || [];
+      const next = days.includes(day) ? days.filter(d => d !== day) : [...days, day];
+      return { ...f, roster: { ...f.roster, days: next } };
+    });
+  }
+  function setRosterTime(field, value) {
+    setForm(f => ({ ...f, roster: { ...f.roster, [field]: value } }));
+  }
 
   async function handleSave() {
     if (!form.name.trim()) return;
@@ -37,10 +59,13 @@ export default function Employees() {
   return (
     <div className="p-5 md:p-8 max-w-2xl space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1A1A18]">Team</h1>
-          <p className="text-sm text-[#9E9E98] mt-0.5">{employees.length} members</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <div>
+            <h1 className="text-2xl font-bold text-[#1A1A18]">Team</h1>
+            <p className="text-sm text-[#9E9E98] mt-0.5">{employees.length} members</p>
+          </div>
         </div>
         <Button variant="primary" onClick={openCreate}>+ Add Member</Button>
       </div>
@@ -57,10 +82,11 @@ export default function Employees() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-[#1A1A18] text-sm">{emp.name}</p>
                   <p className="text-xs text-[#9E9E98]">{emp.role}</p>
-                  <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
                     {emp.phone && <a href={`tel:${emp.phone}`} className="text-xs text-[#6B6B66] hover:text-[#E8611A]">📞 {emp.phone}</a>}
                     {emp.email && <a href={`mailto:${emp.email}`} className="text-xs text-[#6B6B66] hover:text-[#E8611A] truncate">✉️ {emp.email}</a>}
                   </div>
+                  <p className="text-[11px] text-[#9E9E98] mt-1">🗓 {formatRoster(emp.roster)}</p>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => openEdit(emp)} className="w-8 h-8 rounded-xl bg-[#F5F4F0] flex items-center justify-center text-[#6B6B66] hover:bg-[#E0DED8] transition-colors text-sm">✏️</button>
@@ -86,6 +112,39 @@ export default function Employees() {
           </Select>
           <Input label="Phone" placeholder="+47 000 00 000" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} />
           <Input label="Email" placeholder="name@company.no" type="email" value={form.email} onChange={e => set('email', e.target.value)} />
+
+          {/* Roster */}
+          <div className="pt-2 border-t border-[#E0DED8]">
+            <label className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide block mb-2">Roster</label>
+            <div className="flex gap-1.5 flex-wrap mb-3">
+              {ROSTER_DAYS.map(d => {
+                const active = form.roster?.days?.includes(d.value);
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() => toggleRosterDay(d.value)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${active ? 'bg-[#E8611A] text-white border-[#E8611A]' : 'bg-white text-[#6B6B66] border-[#E0DED8] hover:border-[#E8611A]/30'}`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide block mb-1">Start</label>
+                <input type="time" value={form.roster?.startTime || ''} onChange={e => setRosterTime('startTime', e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#E0DED8] bg-[#F9F8F5] text-sm outline-none focus:border-[#E8611A]" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide block mb-1">End</label>
+                <input type="time" value={form.roster?.endTime || ''} onChange={e => setRosterTime('endTime', e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#E0DED8] bg-[#F9F8F5] text-sm outline-none focus:border-[#E8611A]" />
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
             <Button variant="primary" onClick={handleSave} disabled={saving || !form.name.trim()} className="flex-1">

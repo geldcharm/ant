@@ -10,11 +10,12 @@
 import { v4 as uuidv4 } from 'uuid';
 
 // ── Seed Data ────────────────────────────────────────────────
+const DEFAULT_ROSTER = { days: ['mon','tue','wed','thu','fri'], startTime: '07:00', endTime: '16:00' };
 let employees = [
-  { id: 'e1', name: 'Lars Hansen', role: 'Foreman', phone: '+47 900 11 111', email: 'lars@pavemaster.no', avatar: 'LH', color: '#6366F1', active: true },
-  { id: 'e2', name: 'Mia Olsen',   role: 'Operator', phone: '+47 900 22 222', email: 'mia@pavemaster.no',  avatar: 'MO', color: '#10B981', active: true },
-  { id: 'e3', name: 'Erik Berg',   role: 'Laborer',   phone: '+47 900 33 333', email: 'erik@pavemaster.no', avatar: 'EB', color: '#F59E0B', active: true },
-  { id: 'e4', name: 'Sofia Dal',   role: 'Operator',  phone: '+47 900 44 444', email: 'sofia@pavemaster.no',avatar: 'SD', color: '#EC4899', active: true },
+  { id: 'e1', name: 'Lars Hansen', role: 'Foreman', phone: '+47 900 11 111', email: 'lars@pavemaster.no', avatar: 'LH', color: '#EC4899', active: true, roster: { ...DEFAULT_ROSTER } },
+  { id: 'e2', name: 'Mia Olsen',   role: 'Operator', phone: '+47 900 22 222', email: 'mia@pavemaster.no',  avatar: 'MO', color: '#EC4899', active: true, roster: { ...DEFAULT_ROSTER } },
+  { id: 'e3', name: 'Erik Berg',   role: 'Laborer',   phone: '+47 900 33 333', email: 'erik@pavemaster.no', avatar: 'EB', color: '#EC4899', active: true, roster: { days: ['wed','thu','fri','sat','sun'], startTime: '06:30', endTime: '17:30' } },
+  { id: 'e4', name: 'Sofia Dal',   role: 'Operator',  phone: '+47 900 44 444', email: 'sofia@pavemaster.no',avatar: 'SD', color: '#EC4899', active: true, roster: { ...DEFAULT_ROSTER } },
 ];
 
 let jobs = [
@@ -155,7 +156,7 @@ export async function createEmployee(data) {
   const emp = {
     id: uuidv4(),
     avatar: data.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2),
-    color: ['#6366F1','#10B981','#F59E0B','#EC4899','#3B82F6','#8B5CF6'][Math.floor(Math.random()*6)],
+    color: '#EC4899',
     active: true,
     createdAt: new Date().toISOString(),
     ...data,
@@ -304,4 +305,121 @@ export async function updateQuote(id, data) {
 export async function deleteQuote(id) {
   await delay();
   quotes = quotes.filter(q => q.id !== id);
+}
+
+// ── Invoices API ─────────────────────────────────────────────
+let invoices = [
+  {
+    id: 'inv1',
+    invoiceNumber: 'INV-0001',
+    jobId: 'j3',
+    jobRef: 'JOB-0003',
+    quoteId: '',
+    date: '2026-03-26',
+    dueDate: '2026-04-09',
+    status: 'awaiting_payment',
+    contactName: 'Trondheim Kommune',
+    clientAddress: 'Haakon VIIs gate',
+    clientSuburb: 'Trondheim',
+    clientCountry: 'Norway',
+    businessName: 'PaveMaster AS',
+    businessAddress: 'Industriveien 12',
+    businessSuburb: 'Trondheim, 7030',
+    businessPhone: '+47 900 00 000',
+    businessEmail: 'post@pavemaster.no',
+    businessAbn: 'Org: 912 345 678',
+    items: [
+      { id: 'ii1', item: 'Edge repair', description: '400m stretch', quantity: 400, unitPrice: 11.5, discountPercent: 0, tax: 'GST (15%)', amount: 4600 },
+    ],
+    subtotal: 4600,
+    gstAmount: 690,
+    total: 5290,
+    notes: 'Payment within 14 days.',
+    paymentTerms: 'Net 14 days',
+    bankName: 'DNB',
+    bankBsb: '1234',
+    bankAccount: '1234.56.78901',
+    logo: '',
+    createdAt: new Date().toISOString(),
+  },
+];
+
+function generateInvoiceNumber() {
+  const existing = invoices
+    .map(i => i.invoiceNumber)
+    .filter(r => r && /^INV-\d+$/.test(r))
+    .map(r => parseInt(r.replace('INV-', ''), 10));
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return `INV-${String(next).padStart(4, '0')}`;
+}
+
+export { generateInvoiceNumber };
+
+export async function getInvoices() {
+  await delay();
+  return [...invoices];
+}
+
+export async function getInvoice(id) {
+  await delay();
+  return invoices.find(i => i.id === id) || null;
+}
+
+export async function createInvoice(data) {
+  await delay();
+  const invoice = {
+    id: uuidv4(),
+    invoiceNumber: data.invoiceNumber || generateInvoiceNumber(),
+    items: [],
+    subtotal: 0,
+    gstAmount: 0,
+    total: 0,
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    ...data,
+  };
+  invoices.push(invoice);
+  return invoice;
+}
+
+export async function updateInvoice(id, data) {
+  await delay();
+  invoices = invoices.map(i => i.id === id ? { ...i, ...data } : i);
+  return invoices.find(i => i.id === id);
+}
+
+export async function deleteInvoice(id) {
+  await delay();
+  invoices = invoices.filter(i => i.id !== id);
+}
+
+// ── Time Entries API ─────────────────────────────────────────
+let timeEntries = [
+  { id: 'te1', employeeId: 'e1', jobId: 'j1', date: '2026-04-06', startTime: '08:00', endTime: '16:00', breakMinutes: 30, hours: 7.5, notes: 'Prep and base layer', status: 'approved', createdAt: new Date().toISOString() },
+  { id: 'te2', employeeId: 'e2', jobId: 'j1', date: '2026-04-06', startTime: '08:00', endTime: '16:00', breakMinutes: 30, hours: 7.5, notes: '', status: 'approved', createdAt: new Date().toISOString() },
+  { id: 'te3', employeeId: 'e1', jobId: 'j1', date: '2026-04-07', startTime: '08:00', endTime: '15:00', breakMinutes: 30, hours: 6.5, notes: '', status: 'pending', createdAt: new Date().toISOString() },
+  { id: 'te4', employeeId: 'e3', jobId: 'j2', date: '2026-04-08', startTime: '07:00', endTime: '17:00', breakMinutes: 45, hours: 9.25, notes: 'Sealcoat day 1', status: 'pending', createdAt: new Date().toISOString() },
+];
+
+export async function getTimeEntries() {
+  await delay();
+  return [...timeEntries];
+}
+
+export async function createTimeEntry(data) {
+  await delay();
+  const entry = { id: uuidv4(), status: 'pending', createdAt: new Date().toISOString(), ...data };
+  timeEntries.push(entry);
+  return entry;
+}
+
+export async function updateTimeEntry(id, data) {
+  await delay();
+  timeEntries = timeEntries.map(t => t.id === id ? { ...t, ...data } : t);
+  return timeEntries.find(t => t.id === id);
+}
+
+export async function deleteTimeEntry(id) {
+  await delay();
+  timeEntries = timeEntries.filter(t => t.id !== id);
 }

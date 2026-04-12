@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getJobs, getEmployees } from '../db';
-import { StatusBadge, Card } from '../components/ui';
+import { StatusBadge, Card, BackButton } from '../components/ui';
 import { formatDate, JOB_STATUSES } from '../utils/constants';
 
 export default function Dashboard() {
@@ -26,9 +26,12 @@ export default function Dashboard() {
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-5xl">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-[#1A1A18]">Good morning 👋</h1>
-        <p className="text-sm text-[#9E9E98] mt-0.5">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+      <div className="flex items-center gap-3">
+        <BackButton />
+        <div>
+          <h1 className="text-2xl font-bold text-[#1A1A18]">Good morning 👋</h1>
+          <p className="text-sm text-[#9E9E98] mt-0.5">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+        </div>
       </div>
 
       {/* Stats */}

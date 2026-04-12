@@ -4,9 +4,11 @@ import { useRole } from '../context/RoleContext';
 const NAV = [
   { to: '/',           label: 'Dashboard',  icon: '⬡',  adminOnly: true },
   { to: '/jobs',       label: 'Jobs',       icon: '📋', adminOnly: false },
-  { to: '/quotes',    label: 'Quotes',     icon: '📝',  adminOnly: true },
-  { to: '/calendar',  label: 'Calendar',   icon: '📅',  adminOnly: false },
-  { to: '/employees', label: 'Team',        icon: '👥',  adminOnly: true },
+  { to: '/quotes',     label: 'Quotes',     icon: '📝', adminOnly: true },
+  { to: '/invoices',   label: 'Invoices',   icon: '🧾', adminOnly: true },
+  { to: '/calendar',   label: 'Calendar',   icon: '📅', adminOnly: false },
+  { to: '/employees',  label: 'Team',       icon: '👥', adminOnly: true },
+  { to: '/timesheet',  label: 'Time Sheet', icon: '⏱️', adminOnly: true },
 ];
 
 export default function Sidebar({ mobile, onClose }) {
@@ -19,7 +21,7 @@ export default function Sidebar({ mobile, onClose }) {
     setRole(newRole);
     // Redirect employee away from admin-only pages
     if (newRole === 'employee') {
-      const adminPaths = ['/', '/employees', '/quotes'];
+      const adminPaths = ['/', '/employees', '/quotes', '/invoices', '/timesheet'];
       const isOnAdminPage = adminPaths.some(p => loc.pathname === p || loc.pathname.startsWith(p + '/')) || loc.pathname.includes('/new') || loc.pathname.includes('/edit');
       if (isOnAdminPage) navigate('/calendar');
     }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getJobs, getEmployees } from '../db';
-import { StatusBadge, Card } from '../components/ui';
+import { StatusBadge, Card, BackButton, Modal } from '../components/ui';
 import { getStatus, JOB_STATUSES } from '../utils/constants';
 import { useRole } from '../context/RoleContext';
 
@@ -13,13 +13,10 @@ function getFirstDayOfMonth(year, month) { const d = new Date(year, month, 1).ge
 
 // Priority statuses shown first in the filter bar
 const STATUS_FILTERS = [
-  { value: 'all',     label: 'All',     color: '#1A1A18', bg: '#F5F4F0' },
-  { value: 'new',     label: 'New',     color: '#9E9E98', bg: '#F5F4F0' },
-  { value: 'visit',   label: 'Visit',   color: '#6366F1', bg: '#EEF2FF' },
-  { value: 'book',    label: 'Book',    color: '#7C3AED', bg: '#F5F3FF' },
-  { value: 'quote',   label: 'Quote',   color: '#D97706', bg: '#FFFBEB' },
-  { value: 'approve', label: 'Approve', color: '#2563EB', bg: '#EFF6FF' },
-  { value: 'done',    label: 'Done',    color: '#059669', bg: '#ECFDF5' },
+  { value: 'all',     label: 'All',         color: '#1A1A18', bg: '#F5F4F0' },
+  { value: 'new',     label: 'New',         color: '#9E9E98', bg: '#F5F4F0' },
+  { value: 'visit',   label: 'Appointment', color: '#6366F1', bg: '#EEF2FF' },
+  { value: 'approve', label: 'Schedule',    color: '#2563EB', bg: '#EFF6FF' },
 ];
 
 export default function Calendar() {
@@ -30,6 +27,7 @@ export default function Calendar() {
   const [current, setCurrent] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [selected, setSelected] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [weekOffset, setWeekOffset] = useState(0);
   const [crewFilter, setCrewFilter] = useState([]); // [] = all, or array of employee ids
   const [crewOpen, setCrewOpen] = useState(false);
   const navigate = useNavigate();
@@ -62,6 +60,15 @@ export default function Calendar() {
   function prevMonth() { setCurrent(c => c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 }); }
   function nextMonth() { setCurrent(c => c.month === 11 ? { year: c.year + 1, month: 0 } : { ...c, month: c.month + 1 }); }
 
+  function shiftSelected(days) {
+    if (!selected) return;
+    const d = new Date(selected + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    setSelected(ds);
+    setCurrent({ year: d.getFullYear(), month: d.getMonth() });
+  }
+
   const { year, month } = current;
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
@@ -73,12 +80,17 @@ export default function Calendar() {
 
   const selectedJobs = selected ? jobsForDate(selected) : [];
 
-  // Week view
+  // Week view — anchored to today + weekOffset (in weeks)
   const weekStart = (() => {
     const d = new Date();
     const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
+    d.setDate(diff + weekOffset * 7);
+    return d;
   })();
+  const weekEnd = (() => { const d = new Date(weekStart); d.setDate(d.getDate() + 6); return d; })();
+  const weekLabel = weekStart.getMonth() === weekEnd.getMonth()
+    ? `${MONTHS[weekStart.getMonth()]} ${weekStart.getFullYear()}`
+    : `${MONTHS[weekStart.getMonth()]} – ${MONTHS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`;
   const weekDays = Array.from({length: 7}, (_, i) => {
     const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
     return { date: d, str: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`, label: DAYS[i], num: d.getDate() };
@@ -90,10 +102,13 @@ export default function Calendar() {
   return (
     <div className="p-5 md:p-8 space-y-4 max-w-5xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1A1A18]">Calendar</h1>
-          <p className="text-xs text-[#9E9E98] mt-0.5">{totalFiltered} job{totalFiltered !== 1 ? 's' : ''} shown</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <div>
+            <h1 className="text-2xl font-bold text-[#1A1A18]">Calendar</h1>
+            <p className="text-xs text-[#9E9E98] mt-0.5">{totalFiltered} job{totalFiltered !== 1 ? 's' : ''} shown</p>
+          </div>
         </div>
         <div className="flex gap-1 bg-[#F5F4F0] p-1 rounded-xl">
           {['month','week'].map(v => (
@@ -288,19 +303,38 @@ export default function Calendar() {
         </Card>
       )}
 
+      {/* Week Nav */}
+      {view === 'week' && (
+        <div className="flex items-center justify-between">
+          <button onClick={() => setWeekOffset(o => o - 1)} className="w-9 h-9 rounded-xl bg-white border border-[#E0DED8] flex items-center justify-center text-[#6B6B66] hover:bg-[#F5F4F0] transition-colors">‹</button>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-[#1A1A18]">{weekLabel}</h2>
+            {weekOffset !== 0 && (
+              <button onClick={() => setWeekOffset(0)} className="text-xs text-[#E8611A] font-medium hover:underline">Today</button>
+            )}
+          </div>
+          <button onClick={() => setWeekOffset(o => o + 1)} className="w-9 h-9 rounded-xl bg-white border border-[#E0DED8] flex items-center justify-center text-[#6B6B66] hover:bg-[#F5F4F0] transition-colors">›</button>
+        </div>
+      )}
+
       {/* ── Week View ────────────────────────────── */}
       {view === 'week' && (
         <Card className="overflow-hidden">
           <div className="grid grid-cols-7 border-b border-[#E0DED8]">
             {weekDays.map(d => {
               const isToday = d.str === todayStr;
+              const isSelected = d.str === selected;
               const count = jobsForDate(d.str).length;
               return (
-                <div key={d.str} className="p-2 text-center border-r border-[#E0DED8] last:border-r-0">
+                <button
+                  key={d.str}
+                  onClick={() => setSelected(isSelected ? null : d.str)}
+                  className={`p-2 text-center border-r border-[#E0DED8] last:border-r-0 cursor-pointer transition-colors ${isSelected ? 'bg-[#FDF0E8]' : 'hover:bg-[#F9F8F5]'}`}
+                >
                   <p className="text-xs text-[#9E9E98]">{d.label}</p>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mx-auto mt-1 ${isToday ? 'bg-[#E8611A] text-white' : 'text-[#1A1A18]'}`}>{d.num}</div>
                   {count > 0 && <div className="w-1 h-1 rounded-full bg-[#E8611A] mx-auto mt-1" />}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -349,66 +383,102 @@ export default function Calendar() {
         </Card>
       )}
 
-      {/* ── Selected day panel ───────────────────── */}
-      {selected && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-[#1A1A18]">
-              {new Date(selected + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </h3>
-            <button onClick={() => setSelected(null)} className="text-xs text-[#9E9E98] hover:text-[#1A1A18]">✕ Close</button>
-          </div>
-          {isAdmin && (
-            <button
-              onClick={() => navigate('/jobs/new', { state: { startDate: selected } })}
-              className="w-full flex items-center justify-center gap-2 mb-3 px-4 py-2.5 rounded-xl bg-[#E8611A] text-white text-sm font-semibold hover:bg-[#C44E10] transition-colors shadow-sm"
-            >
-              + Add Job
-            </button>
-          )}
-          {selectedJobs.length === 0 ? (
-            <Card className="p-6 text-center">
-              <p className="text-[#9E9E98] text-sm">No matching jobs on this day</p>
-              {(statusFilter !== 'all' || crewFilter.length > 0) && (
-                <button onClick={() => { setStatusFilter('all'); setCrewFilter([]); }} className="text-xs text-[#E8611A] font-medium mt-1 hover:underline">Clear filters</button>
-              )}
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {selectedJobs.map(job => {
-                const team = employees.filter(e => job.assignedEmployees?.includes(e.id));
-                const st = getStatus(job.status);
-                return (
-                  <Card key={job.id} hover onClick={() => navigate(`/jobs/${job.id}`)} className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: st.color }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <StatusBadge status={job.status} size="sm" />
-                          {job.startTime && <span className="text-xs text-[#9E9E98] font-mono">{job.startTime}</span>}
-                        </div>
-                        <p className="font-semibold text-sm text-[#1A1A18]">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</p>
-                        {job.address && <p className="text-xs text-[#9E9E98] mt-0.5">📍 {job.address}</p>}
-                      </div>
-                      <div className="flex -space-x-1.5 flex-shrink-0">
-                        {team.slice(0,3).map(e => (
-                          <div
-                            key={e.id}
-                            style={{ background: e.color, outline: crewFilter.includes(e.id) ? `2px solid ${e.color}` : 'none', outlineOffset: '1px' }}
-                            className="w-7 h-7 rounded-full border-2 border-white text-[9px] font-bold text-white flex items-center justify-center"
-                            title={e.name}
-                          >{e.avatar}</div>
-                        ))}
-                        {team.length > 3 && <div className="w-7 h-7 rounded-full border-2 border-white bg-[#E0DED8] flex items-center justify-center text-[9px] font-semibold text-[#6B6B66]">+{team.length-3}</div>}
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
+      {/* ── Selected day popup ───────────────────── */}
+      <Modal
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title={selected ? new Date(selected + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+      >
+        {selected && (
+          <div className="space-y-4">
+            {/* Day navigation */}
+            <div className="flex items-center justify-between">
+              <button onClick={() => shiftSelected(-1)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#F5F4F0] text-xs font-semibold text-[#6B6B66] hover:bg-[#E0DED8] transition-colors">‹ Prev day</button>
+              <span className="text-xs text-[#9E9E98]">
+                {selectedJobs.length} job{selectedJobs.length !== 1 ? 's' : ''}
+              </span>
+              <button onClick={() => shiftSelected(1)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#F5F4F0] text-xs font-semibold text-[#6B6B66] hover:bg-[#E0DED8] transition-colors">Next day ›</button>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Add Job button at top */}
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/jobs/new', { state: { startDate: selected } })}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#E8611A] text-white text-sm font-semibold hover:bg-[#C44E10] transition-colors shadow-sm"
+              >
+                + Add Job on this day
+              </button>
+            )}
+
+            {/* Crew working this day */}
+            {selectedJobs.length > 0 && (() => {
+              const workingIds = new Set(selectedJobs.flatMap(j => j.assignedEmployees || []));
+              const working = employees.filter(e => workingIds.has(e.id));
+              if (working.length === 0) return null;
+              return (
+                <div>
+                  <p className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide mb-1.5">Working this day</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {working.map(e => (
+                      <span key={e.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-[#E0DED8] bg-white text-xs font-medium text-[#1A1A18]">
+                        <span style={{ background: e.color }} className="w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center">{e.avatar?.[0]}</span>
+                        {e.name.split(' ')[0]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Jobs list */}
+            {selectedJobs.length === 0 ? (
+              <Card className="p-6 text-center">
+                <p className="text-[#9E9E98] text-sm">No jobs on this day</p>
+                {(statusFilter !== 'all' || crewFilter.length > 0) && (
+                  <button onClick={() => { setStatusFilter('all'); setCrewFilter([]); }} className="text-xs text-[#E8611A] font-medium mt-1 hover:underline">Clear filters</button>
+                )}
+              </Card>
+            ) : (
+              <div>
+                <p className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide mb-1.5">Jobs</p>
+                <div className="space-y-2">
+                  {selectedJobs.map(job => {
+                    const team = employees.filter(e => job.assignedEmployees?.includes(e.id));
+                    const st = getStatus(job.status);
+                    return (
+                      <Card key={job.id} hover onClick={() => { setSelected(null); navigate(`/jobs/${job.id}`); }} className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: st.color }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <StatusBadge status={job.status} size="sm" />
+                              {job.startTime && <span className="text-xs text-[#9E9E98] font-mono">{job.startTime}{job.endTime ? `–${job.endTime}` : ''}</span>}
+                            </div>
+                            <p className="font-semibold text-sm text-[#1A1A18]">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</p>
+                            {job.address && <p className="text-xs text-[#9E9E98] mt-0.5">📍 {job.address}</p>}
+                            {job.description && <p className="text-xs text-[#9E9E98] mt-1 line-clamp-2">{job.description}</p>}
+                          </div>
+                          <div className="flex -space-x-1.5 flex-shrink-0">
+                            {team.slice(0,3).map(e => (
+                              <div
+                                key={e.id}
+                                style={{ background: e.color, outline: crewFilter.includes(e.id) ? `2px solid ${e.color}` : 'none', outlineOffset: '1px' }}
+                                className="w-7 h-7 rounded-full border-2 border-white text-[9px] font-bold text-white flex items-center justify-center"
+                                title={e.name}
+                              >{e.avatar}</div>
+                            ))}
+                            {team.length > 3 && <div className="w-7 h-7 rounded-full border-2 border-white bg-[#E0DED8] flex items-center justify-center text-[9px] font-semibold text-[#6B6B66]">+{team.length-3}</div>}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* Click outside crew dropdown */}
       {crewOpen && <div className="fixed inset-0 z-10" onClick={() => setCrewOpen(false)} />}

@@ -1,4 +1,23 @@
 import { getStatus } from '../utils/constants';
+import { useNavigate } from 'react-router-dom';
+
+export function BackButton({ to, className = '' }) {
+  const navigate = useNavigate();
+  const handleClick = () => {
+    if (to) navigate(to);
+    else if (window.history.length > 1) navigate(-1);
+    else navigate('/');
+  };
+  return (
+    <button
+      onClick={handleClick}
+      aria-label="Go back"
+      className={`w-9 h-9 rounded-xl bg-white border border-[#E0DED8] flex items-center justify-center text-[#6B6B66] hover:bg-[#F5F4F0] transition-colors ${className}`}
+    >
+      ←
+    </button>
+  );
+}
 
 export function StatusBadge({ status, size = 'md' }) {
   const s = getStatus(status);
@@ -27,11 +46,12 @@ export function Avatar({ name, color, size = 'md' }) {
   );
 }
 
-export function Card({ children, className = '', onClick, hover = false }) {
+export function Card({ children, className = '', onClick, hover = false, style }) {
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-2xl border border-[#E0DED8] ${hover ? 'hover:border-[#E8611A]/40 hover:shadow-md cursor-pointer transition-all duration-200' : ''} ${className}`}
+      style={style}
+      className={`bg-white rounded-2xl border border-[#E0DED8] ${hover ? 'hover:shadow-md cursor-pointer transition-all duration-200' : ''} ${className}`}
     >
       {children}
     </div>

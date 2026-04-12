@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { createJob, updateJob, getJob, getEmployees, generateReferenceNumber } from '../db';
+import { createJob, updateJob, getJob, getJobs, getEmployees, generateReferenceNumber } from '../db';
 import { Button, Input, Textarea, Card, Avatar } from '../components/ui';
-import { JOB_STATUSES } from '../utils/constants';
+import { JOB_STATUSES, isOnRoster, formatRoster, getStatus } from '../utils/constants';
 import { v4 as uuidv4 } from 'uuid';
 
 const EMPTY = {
@@ -33,8 +33,7 @@ const STEPS = [
   { id: 'details',  icon: '📋', label: 'Contact & Job Details' },
   { id: 'photos',   icon: '📷', label: 'Photos' },
   { id: 'docs',     icon: '📁', label: 'Documents & Receipts' },
-  { id: 'schedule', icon: '📅', label: 'Schedule' },
-  { id: 'team',     icon: '👥', label: 'Assign Team' },
+  { id: 'schedule', icon: '📅', label: 'Calendar & Team' },
 ];
 
 export default function JobForm() {
@@ -45,6 +44,11 @@ export default function JobForm() {
   const initialDate = location.state?.startDate || '';
   const [form, setForm] = useState({ ...EMPTY, startDate: initialDate, referenceNumber: generateReferenceNumber() });
   const [employees, setEmployees] = useState([]);
+  const [allJobs, setAllJobs] = useState([]);
+  const [calMonth, setCalMonth] = useState(() => {
+    const base = initialDate ? new Date(initialDate + 'T12:00:00') : new Date();
+    return { year: base.getFullYear(), month: base.getMonth() };
+  });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(null); // null = overview, string = step id
@@ -54,6 +58,7 @@ export default function JobForm() {
 
   useEffect(() => {
     getEmployees().then(setEmployees);
+    getJobs().then(setAllJobs);
     if (isEdit) getJob(id).then(j => j && setForm({ ...EMPTY, ...j }));
   }, [id]);
 
@@ -134,7 +139,6 @@ export default function JobForm() {
       case 'photos':   return form.photos.length > 0;
       case 'docs':     return form.documents.length > 0 || form.receipts.length > 0;
       case 'schedule': return !!form.startDate;
-      case 'team':     return form.assignedEmployees.length > 0;
       default: return false;
     }
   }
@@ -153,10 +157,12 @@ export default function JobForm() {
         const count = form.documents.length + form.receipts.length;
         return count ? `${count} file${count !== 1 ? 's' : ''}` : 'No files';
       }
-      case 'schedule':
-        return form.startDate || 'Not set';
-      case 'team':
-        return form.assignedEmployees.length ? `${form.assignedEmployees.length} member${form.assignedEmployees.length !== 1 ? 's' : ''}` : 'No one assigned';
+      case 'schedule': {
+        const parts = [];
+        parts.push(form.startDate || 'Not set');
+        if (form.assignedEmployees.length) parts.push(`${form.assignedEmployees.length} crew`);
+        return parts.join(' · ');
+      }
       default: return '';
     }
   }
@@ -268,49 +274,191 @@ export default function JobForm() {
     </StepShell>
   );
 
-  if (step === 'schedule') return (
-    <StepShell title="Schedule" onBack={() => setStep(null)} onNext={() => setStep(nextStep?.id)} onPrev={() => setStep(prevStep?.id)} prevLabel={prevStep?.label} nextLabel={nextStep?.label} step={stepIdx + 1} total={STEPS.length}>
-      <p className="text-sm text-[#9E9E98]">Add an end date/time for jobs that span multiple days.</p>
-      <div>
-        <p className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide mb-2">From</p>
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Date" type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} error={errors.startDate} />
-          <Input label="Time" type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide mb-2">To (optional – for multi-day jobs)</p>
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="End date" type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
-          <Input label="End time" type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} />
-        </div>
-      </div>
-    </StepShell>
-  );
+  if (step === 'schedule') {
+    const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const { year, month } = calMonth;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDowSun = new Date(year, month, 1).getDay();
+    const firstDay = firstDowSun === 0 ? 6 : firstDowSun - 1; // Mon-first
+    const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+    const makeDateStr = day => `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 
-  if (step === 'team') return (
-    <StepShell title="Assign Team" onBack={() => setStep(null)} onPrev={() => setStep(prevStep?.id)} prevLabel={prevStep?.label} step={stepIdx + 1} total={STEPS.length} isLast>
-      <p className="text-xs text-[#9E9E98]">Select crew members to assign to this job.</p>
-      <div className="space-y-2">
-        {employees.map(emp => {
-          const selected = form.assignedEmployees.includes(emp.id);
-          return (
-            <div key={emp.id} onClick={() => toggleEmployee(emp.id)}
-              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selected ? 'border-[#E8611A] bg-[#FDF0E8]' : 'border-[#E0DED8] hover:border-[#E8611A]/40 hover:bg-[#F9F8F5]'}`}>
-              <Avatar name={emp.name} color={emp.color} size="sm" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#1A1A18]">{emp.name}</p>
-                <p className="text-xs text-[#9E9E98]">{emp.role}</p>
+    // Other jobs that occupy a given date (excluding the job being edited)
+    const jobsOnDate = ds => allJobs.filter(j => {
+      if (isEdit && j.id === id) return false;
+      if (!j.startDate) return false;
+      if (j.startDate === ds) return true;
+      if (j.endDate && j.startDate <= ds && j.endDate >= ds) return true;
+      return false;
+    });
+
+    const selectedDateJobs = form.startDate ? jobsOnDate(form.startDate) : [];
+    const busyIds = new Set(selectedDateJobs.flatMap(j => j.assignedEmployees || []));
+    const selectedDow = form.startDate ? new Date(form.startDate + 'T12:00:00') : null;
+
+    function prevMonth() { setCalMonth(c => c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 }); }
+    function nextMonth() { setCalMonth(c => c.month === 11 ? { year: c.year + 1, month: 0 } : { ...c, month: c.month + 1 }); }
+
+    return (
+      <StepShell title="Calendar & Team" onBack={() => setStep(null)} onPrev={() => setStep(prevStep?.id)} prevLabel={prevStep?.label} step={stepIdx + 1} total={STEPS.length} isLast>
+        <p className="text-sm text-[#9E9E98]">Pick a day — busy days show how many jobs are already booked.</p>
+
+        {/* Mini month calendar */}
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-[#E0DED8]">
+            <button type="button" onClick={prevMonth} className="w-8 h-8 rounded-lg hover:bg-[#F5F4F0] text-[#6B6B66]">‹</button>
+            <p className="font-semibold text-sm text-[#1A1A18]">{MONTHS[month]} {year}</p>
+            <button type="button" onClick={nextMonth} className="w-8 h-8 rounded-lg hover:bg-[#F5F4F0] text-[#6B6B66]">›</button>
+          </div>
+          <div className="grid grid-cols-7 border-b border-[#E0DED8]">
+            {DAYS.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold text-[#9E9E98]">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7">
+            {Array.from({length: firstDay}).map((_, i) => <div key={`e${i}`} className="border-b border-r border-[#E0DED8] min-h-[52px] bg-[#F9F8F5]" />)}
+            {Array.from({length: daysInMonth}, (_, i) => i + 1).map(day => {
+              const ds = makeDateStr(day);
+              const dayJobs = jobsOnDate(ds);
+              const isToday = ds === todayStr;
+              const isSelected = ds === form.startDate;
+              const isLastCol = (day + firstDay - 1) % 7 === 6;
+              return (
+                <button
+                  type="button"
+                  key={day}
+                  onClick={() => set('startDate', ds)}
+                  className={`border-b border-[#E0DED8] min-h-[52px] p-1 text-left transition-colors ${isLastCol ? '' : 'border-r'} ${isSelected ? 'bg-[#FDF0E8] ring-2 ring-[#E8611A] ring-inset' : 'hover:bg-[#F9F8F5]'}`}
+                >
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold ${isToday ? 'bg-[#E8611A] text-white' : 'text-[#6B6B66]'}`}>{day}</div>
+                  {dayJobs.length > 0 && (
+                    <div className="flex gap-0.5 mt-1 flex-wrap">
+                      {dayJobs.slice(0, 3).map(j => {
+                        const st = getStatus(j.status);
+                        return <span key={j.id} className="w-1.5 h-1.5 rounded-full" style={{ background: st.color }} title={`${j.contactName} · ${st.label}`} />;
+                      })}
+                      {dayJobs.length > 3 && <span className="text-[8px] text-[#9E9E98] leading-none">+{dayJobs.length - 3}</span>}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Selected day availability */}
+        {form.startDate && (
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-sm text-[#1A1A18]">
+                {selectedDow?.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+              <span className="text-xs text-[#9E9E98]">{selectedDateJobs.length} job{selectedDateJobs.length !== 1 ? 's' : ''} booked</span>
+            </div>
+
+            {selectedDateJobs.length > 0 && (
+              <div className="space-y-1.5">
+                {selectedDateJobs.map(j => {
+                  const st = getStatus(j.status);
+                  const team = employees.filter(e => (j.assignedEmployees || []).includes(e.id));
+                  return (
+                    <div key={j.id} className="p-2 rounded-lg border border-[#E0DED8] flex items-center gap-2">
+                      <span className="w-1 self-stretch rounded-full" style={{ background: st.color }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-[#1A1A18] truncate">{j.contactName}{j.referenceNumber ? ` · ${j.referenceNumber}` : ''}</p>
+                        <p className="text-[10px] text-[#9E9E98] truncate">{j.startTime || '—'}{j.endTime ? `–${j.endTime}` : ''} · {st.label}</p>
+                      </div>
+                      {team.length > 0 && (
+                        <div className="flex -space-x-1 flex-shrink-0">
+                          {team.slice(0,3).map(e => (
+                            <span key={e.id} title={e.name} style={{ background: e.color }} className="w-5 h-5 rounded-full border border-white text-[8px] font-bold text-white flex items-center justify-center">{e.avatar?.[0]}</span>
+                          ))}
+                          {team.length > 3 && <span className="w-5 h-5 rounded-full border border-white bg-[#E0DED8] text-[8px] font-semibold text-[#6B6B66] flex items-center justify-center">+{team.length-3}</span>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${selected ? 'border-[#E8611A] bg-[#E8611A]' : 'border-[#E0DED8]'}`}>
-                {selected && <span className="text-white text-[10px] font-bold">✓</span>}
+            )}
+
+            {/* Crew availability */}
+            <div>
+              <p className="text-[10px] font-bold text-[#6B6B66] uppercase tracking-wide mb-1.5">Crew availability</p>
+              <div className="flex flex-wrap gap-1.5">
+                {employees.map(emp => {
+                  const busy = busyIds.has(emp.id);
+                  const offRoster = !isOnRoster(emp, form.startDate);
+                  const status = busy ? 'busy' : offRoster ? 'off' : 'free';
+                  const styles = status === 'free'
+                    ? 'bg-[#ECFDF5] text-[#059669] border-[#05966930]'
+                    : status === 'busy'
+                      ? 'bg-[#FEF2F2] text-[#DC2626] border-[#DC262630]'
+                      : 'bg-[#F5F4F0] text-[#9E9E98] border-[#E0DED8]';
+                  const label = status === 'free' ? '✓ Free' : status === 'busy' ? '● Busy' : '○ Off';
+                  return (
+                    <div key={emp.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-medium ${styles}`} title={formatRoster(emp.roster)}>
+                      <span style={{ background: emp.color }} className="w-4 h-4 rounded-full text-white text-[8px] font-bold flex items-center justify-center">{emp.avatar?.[0]}</span>
+                      {emp.name.split(' ')[0]}
+                      <span className="opacity-70">{label}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })}
-      </div>
-    </StepShell>
-  );
+          </Card>
+        )}
+
+        <div>
+          <p className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide mb-2">From</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Date" type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} error={errors.startDate} />
+            <Input label="Time" type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} />
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide mb-2">To (optional – for multi-day jobs)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="End date" type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+            <Input label="End time" type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} />
+          </div>
+        </div>
+
+        {/* Assign team */}
+        <div className="pt-2 border-t border-[#E0DED8]">
+          <p className="text-xs font-semibold text-[#6B6B66] uppercase tracking-wide mb-2">Assign Team</p>
+          <p className="text-xs text-[#9E9E98] mb-3">Tap crew to assign. Busy/off-roster warnings show above.</p>
+          <div className="space-y-2">
+            {employees.map(emp => {
+              const selected = form.assignedEmployees.includes(emp.id);
+              const offRoster = form.startDate && !isOnRoster(emp, form.startDate);
+              const busy = busyIds.has(emp.id);
+              return (
+                <div key={emp.id} onClick={() => toggleEmployee(emp.id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${selected ? 'border-[#E8611A] bg-[#FDF0E8]' : 'border-[#E0DED8] hover:border-[#E8611A]/40 hover:bg-[#F9F8F5]'}`}>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={emp.name} color={emp.color} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#1A1A18]">{emp.name}</p>
+                      <p className="text-xs text-[#9E9E98]">{emp.role} · {formatRoster(emp.roster)}</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${selected ? 'border-[#E8611A] bg-[#E8611A]' : 'border-[#E0DED8]'}`}>
+                      {selected && <span className="text-white text-[10px] font-bold">✓</span>}
+                    </div>
+                  </div>
+                  {selected && busy && (
+                    <p className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1 mt-2">● {emp.name.split(' ')[0]} is already booked on another job this day.</p>
+                  )}
+                  {selected && offRoster && (
+                    <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-2">⚠️ {emp.name.split(' ')[0]} is not rostered on {new Date(form.startDate + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long' })}.</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </StepShell>
+    );
+  }
 
   // ── Overview (step === null) ────────────────────
 
