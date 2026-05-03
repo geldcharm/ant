@@ -3,7 +3,7 @@ export const JOB_STATUSES = [
   { value: 'visit',   label: 'Appointment', color: '#6366F1', bg: '#EEF2FF' },
   { value: 'quote',   label: 'Quote',       color: '#D97706', bg: '#FFFBEB' },
   { value: 'approve', label: 'Schedule',    color: '#2563EB', bg: '#EFF6FF' },
-  { value: 'book',    label: 'Book',        color: '#7C3AED', bg: '#F5F3FF' },
+  { value: 'book',    label: 'Archive',     color: '#7C3AED', bg: '#F5F3FF' },
   { value: 'done',    label: 'Invoice',     color: '#059669', bg: '#ECFDF5' },
 ];
 
