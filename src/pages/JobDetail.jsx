@@ -1,137 +1,109 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getJob, getEmployees, updateJob, deleteJob, getQuotes } from '../db';
-import { StatusBadge, Card, Button, Avatar, Modal } from '../components/ui';
-import { formatDate, JOB_STATUSES, getStatus } from '../utils/constants';
-import { useRole } from '../context/RoleContext';
+import {
+  StatusBadge,
+  Card,
+  Button,
+  Avatar,
+  Modal,
+  ListSkeleton,
+  ErrorState,
+} from '../components/ui';
+import { useJob, useUpdateJob, useDeleteJob } from '../hooks/useJobs';
+import { useEmployees } from '../hooks/useEmployees';
+import { useQuotes } from '../hooks/useQuotes';
+import { useRole } from '../auth/RoleContext';
+import { JOB_STATUSES, getJobStatus } from '../constants/statuses';
+import { formatDate } from '../lib/dates';
+import { exportJobReport } from '../lib/pdf';
 
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { role } = useRole();
-  const isAdmin = role === 'admin';
-  const [job, setJob] = useState(null);
-  const [employees, setEmployees] = useState([]);
-  const [jobQuote, setJobQuote] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { isAdmin } = useRole();
 
-  async function load() {
-    const [j, e, allQuotes] = await Promise.all([getJob(id), getEmployees(), getQuotes()]);
-    if (!j) { navigate('/jobs'); return; }
-    setJob(j); setEmployees(e);
-    setJobQuote(allQuotes.find(q => q.jobId === id) || null);
+  const jobQuery = useJob(id);
+  const employeesQuery = useEmployees();
+  const quotesQuery = useQuotes();
+  const updateMutation = useUpdateJob();
+  const deleteMutation = useDeleteJob();
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exportError, setExportError] = useState(null);
+
+  if (jobQuery.isLoading) return <div className="p-5 md:p-8 max-w-3xl"><ListSkeleton rows={4} /></div>;
+  if (jobQuery.error) {
+    return (
+      <div className="p-5 md:p-8 max-w-3xl">
+        <ErrorState message={jobQuery.error.message} onRetry={() => jobQuery.refetch()} />
+      </div>
+    );
+  }
+  const job = jobQuery.data;
+  if (!job) {
+    navigate('/jobs', { replace: true });
+    return null;
   }
 
-  useEffect(() => { load(); }, [id]);
+  const employees = employeesQuery.data || [];
+  const quotes = quotesQuery.data || [];
+  const team = employees.filter(e => job.assignedEmployees?.includes(e.id));
+  const status = getJobStatus(job.status);
+  const linkedQuote = quotes.find(q => q.jobId === id) || null;
 
-  async function changeStatus(s) {
-    const updated = await updateJob(id, { status: s });
-    setJob(updated);
+  function handleStatusChange(newStatus) {
+    updateMutation.mutate({ id, data: { status: newStatus } });
   }
 
   async function handleDelete() {
-    await deleteJob(id);
+    await deleteMutation.mutateAsync(id);
     navigate('/jobs');
   }
 
-  function exportPDF() {
-    const s = getStatus(job.status);
-    const team = employees.filter(e => job.assignedEmployees?.includes(e.id));
-    const content = `
-      <html><head><style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 40px; color: #1A1A18; max-width: 800px; margin: 0 auto; }
-        h1 { font-size: 24px; margin-bottom: 4px; }
-        .badge { display:inline-block; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: ${s.bg}; color: ${s.color}; border: 1px solid ${s.color}30; }
-        .section { margin: 24px 0; }
-        h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #6B6B66; margin-bottom: 8px; border-bottom: 1px solid #E0DED8; padding-bottom: 6px; }
-        .row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 14px; }
-        .label { color: #9E9E98; width: 120px; flex-shrink: 0; }
-        .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #E0DED8; font-size: 11px; color: #9E9E98; }
-      </style></head><body>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
-          <div>
-            <div style="font-size:11px;color:#9E9E98;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em">JOB REPORT${job.referenceNumber ? ' — ' + job.referenceNumber : ''}</div>
-            <h1>${job.contactName || 'Unnamed Job'}</h1>
-            <div style="margin-top:8px"><span class="badge">${s.label}</span></div>
-          </div>
-          <div style="text-align:right;font-size:12px;color:#9E9E98">
-            <div>PaveMaster</div>
-            <div>${new Date().toLocaleDateString('en-GB')}</div>
-          </div>
-        </div>
-        ${job.description ? `<div style="font-size:14px;color:#6B6B66;margin-bottom:24px;padding:16px;background:#F5F4F0;border-radius:8px">${job.description}</div>` : ''}
-        <div class="section">
-          <h2>Job Details</h2>
-          <div class="row"><span class="label">Address</span><span>${job.address}</span></div>
-          <div class="row"><span class="label">Start</span><span>${formatDate(job.startDate)}${job.startTime ? ' ' + job.startTime : ''}</span></div>
-          ${job.endDate ? `<div class="row"><span class="label">End</span><span>${formatDate(job.endDate)}${job.endTime ? ' ' + job.endTime : ''}</span></div>` : ''}
-          ${job.notes ? `<div class="row"><span class="label">Notes</span><span>${job.notes}</span></div>` : ''}
-        </div>
-        ${(job.contactName || job.contactPhone || job.contactEmail) ? `
-        <div class="section">
-          <h2>Contact</h2>
-          ${job.contactName ? `<div class="row"><span class="label">Name</span><span>${job.contactName}</span></div>` : ''}
-          ${job.contactPhone ? `<div class="row"><span class="label">Phone</span><span>${job.contactPhone}</span></div>` : ''}
-          ${job.contactEmail ? `<div class="row"><span class="label">Email</span><span>${job.contactEmail}</span></div>` : ''}
-        </div>` : ''}
-        ${team.length ? `
-        <div class="section">
-          <h2>Assigned Team (${team.length})</h2>
-          ${team.map(e => `<div class="row"><span class="label">${e.role}</span><span>${e.name} — ${e.phone}</span></div>`).join('')}
-        </div>` : ''}
-        <div class="footer">Generated by PaveMaster · ${new Date().toLocaleString('en-GB')}</div>
-      </body></html>
-    `;
-    const win = window.open('', '_blank');
-    win.document.write(content);
-    win.document.close();
-    win.print();
+  function handleExport() {
+    setExportError(null);
+    try { exportJobReport(job, employees); } catch (err) { setExportError(err.message); }
   }
-
-  if (!job) return <div className="p-8 text-center text-[#9E9E98]">Loading…</div>;
-
-  const team = employees.filter(e => job.assignedEmployees?.includes(e.id));
-  const s = getStatus(job.status);
-  const allFiles = [
-    ...(job.photos||[]).map(f=>({...f,_cat:'photo'})),
-    ...(job.documents||[]).map(f=>({...f,_cat:'document'})),
-    ...(job.receipts||[]).map(f=>({...f,_cat:'receipt'})),
-  ];
 
   return (
     <div className="p-5 md:p-8 max-w-3xl space-y-5">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <button onClick={() => navigate('/jobs')} className="w-9 h-9 rounded-xl bg-white border border-[#E0DED8] flex items-center justify-center text-[#6B6B66] hover:bg-[#F5F4F0] transition-colors mt-0.5">
+      <header className="flex items-start gap-3">
+        <button
+          onClick={() => navigate('/jobs')}
+          aria-label="Back to jobs"
+          className="w-9 h-9 rounded-xl bg-white border border-[#E0DED8] flex items-center justify-center text-[#6B6B66] hover:bg-[#F5F4F0] transition-colors mt-0.5"
+        >
           ←
         </button>
         <div className="flex-1 min-w-0">
           <StatusBadge status={job.status} />
-          <h1 className="text-xl font-bold text-[#1A1A18] mt-1">{job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}</h1>
+          <h1 className="text-xl font-bold text-[#1A1A18] mt-1">
+            {job.contactName}{job.referenceNumber ? ` · ${job.referenceNumber}` : ''}
+          </h1>
           <p className="text-sm text-[#9E9E98]">📍 {job.address}</p>
         </div>
         {isAdmin && (
           <div className="flex gap-2 flex-shrink-0">
-            <Button variant="secondary" size="sm" onClick={exportPDF}>📄 PDF</Button>
+            <Button variant="secondary" size="sm" onClick={handleExport}>📄 PDF</Button>
             <Button variant="secondary" size="sm" onClick={() => navigate(`/jobs/${id}/edit`)}>✏️ Edit</Button>
           </div>
         )}
-      </div>
+      </header>
 
-      {/* Status Changer */}
+      {exportError && <p className="text-sm text-red-500" role="alert">{exportError}</p>}
+
       <Card className="p-4">
         <h2 className="font-semibold text-sm text-[#1A1A18] mb-3">Job Status</h2>
         {isAdmin ? (
           <select
             value={job.status}
-            onChange={e => changeStatus(e.target.value)}
+            onChange={e => handleStatusChange(e.target.value)}
+            aria-label="Job status"
             className="w-full px-4 py-3 rounded-xl border border-[#E0DED8] bg-white text-sm font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E8611A]/30"
-            style={{ color: s.color }}
+            style={{ color: status.color }}
           >
-            {JOB_STATUSES.map(st => (
-              <option key={st.value} value={st.value} style={{ color: st.color }}>
-                {st.label}
-              </option>
+            {JOB_STATUSES.map(s => (
+              <option key={s.value} value={s.value} style={{ color: s.color }}>{s.label}</option>
             ))}
           </select>
         ) : (
@@ -139,19 +111,22 @@ export default function JobDetail() {
         )}
       </Card>
 
-      {/* Details */}
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="p-4">
           <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Calendar</h2>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[#9E9E98]">Start</span>
-              <span className="font-medium">{formatDate(job.startDate)}{job.startTime && <span className="text-[#9E9E98]"> {job.startTime}</span>}</span>
+              <span className="font-medium">
+                {formatDate(job.startDate)}{job.startTime && <span className="text-[#9E9E98]"> {job.startTime}</span>}
+              </span>
             </div>
             {job.endDate && (
               <div className="flex justify-between">
                 <span className="text-[#9E9E98]">End</span>
-                <span className="font-medium">{formatDate(job.endDate)}{job.endTime && <span className="text-[#9E9E98]"> {job.endTime}</span>}</span>
+                <span className="font-medium">
+                  {formatDate(job.endDate)}{job.endTime && <span className="text-[#9E9E98]"> {job.endTime}</span>}
+                </span>
               </div>
             )}
           </div>
@@ -162,22 +137,25 @@ export default function JobDetail() {
             <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Contact</h2>
             <div className="space-y-1.5 text-sm">
               {job.contactName && <p className="font-semibold text-[#1A1A18]">{job.contactName}</p>}
-              {job.contactPhone && <a href={`tel:${job.contactPhone}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A]">📞 {job.contactPhone}</a>}
-              {job.contactEmail && <a href={`mailto:${job.contactEmail}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A] truncate">✉️ {job.contactEmail}</a>}
+              {job.contactPhone && (
+                <a href={`tel:${job.contactPhone}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A]">
+                  📞 {job.contactPhone}
+                </a>
+              )}
+              {job.contactEmail && (
+                <a href={`mailto:${job.contactEmail}`} className="flex items-center gap-2 text-[#6B6B66] hover:text-[#E8611A] truncate">
+                  ✉️ {job.contactEmail}
+                </a>
+              )}
             </div>
           </Card>
         )}
       </div>
 
-      {/* Quote */}
       {isAdmin && (
-        jobQuote ? (
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/quotes/${jobQuote.id}`)}
-            className="w-full justify-center"
-          >
-            📝 Go to Quote {jobQuote.quoteNumber}
+        linkedQuote ? (
+          <Button variant="secondary" onClick={() => navigate(`/quotes/${linkedQuote.id}`)} className="w-full justify-center">
+            📝 Go to Quote {linkedQuote.quoteNumber}
           </Button>
         ) : (
           <Button
@@ -190,7 +168,6 @@ export default function JobDetail() {
         )
       )}
 
-      {/* Description */}
       {job.description && (
         <Card className="p-4">
           <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-2">Description</h2>
@@ -198,7 +175,6 @@ export default function JobDetail() {
         </Card>
       )}
 
-      {/* Notes */}
       {job.notes && (
         <Card className="p-4 border-l-4 border-l-amber-400">
           <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-2">⚠️ Notes</h2>
@@ -206,11 +182,13 @@ export default function JobDetail() {
         </Card>
       )}
 
-      {/* Team */}
       <Card className="p-4">
         <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Team ({team.length})</h2>
         {team.length === 0 ? (
-          <p className="text-sm text-[#9E9E98]">No team assigned yet.{isAdmin && <> <button onClick={() => navigate(`/jobs/${id}/edit`)} className="text-[#E8611A] font-medium">Edit job</button></>}</p>
+          <p className="text-sm text-[#9E9E98]">
+            No team assigned yet.
+            {isAdmin && <> <button onClick={() => navigate(`/jobs/${id}/edit`)} className="text-[#E8611A] font-medium">Edit job</button></>}
+          </p>
         ) : (
           <div className="space-y-2">
             {team.map(emp => (
@@ -227,7 +205,6 @@ export default function JobDetail() {
         )}
       </Card>
 
-      {/* Photos */}
       {job.photos?.length > 0 && (
         <Card className="p-4">
           <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Photos ({job.photos.length})</h2>
@@ -241,21 +218,20 @@ export default function JobDetail() {
         </Card>
       )}
 
-      {/* Documents & Receipts */}
       {(job.documents?.length > 0 || job.receipts?.length > 0) && (
         <Card className="p-4">
           <h2 className="font-semibold text-xs text-[#9E9E98] uppercase tracking-wide mb-3">Documents & Receipts</h2>
           <div className="space-y-2">
             {job.documents?.map(d => (
               <a key={d.id} href={d.url} download={d.name} className="flex items-center gap-3 p-3 bg-[#F5F4F0] rounded-xl hover:bg-[#EEEDE8] transition-colors">
-                <span>📄</span>
+                <span aria-hidden="true">📄</span>
                 <span className="text-sm font-medium text-[#1A1A18] flex-1 truncate">{d.name}</span>
                 <span className="text-xs text-[#9E9E98]">↓</span>
               </a>
             ))}
             {job.receipts?.map(r => (
               <a key={r.id} href={r.url} download={r.name} className="flex items-center gap-3 p-3 bg-[#FFFBEB] rounded-xl hover:bg-amber-50 transition-colors">
-                <span>🧾</span>
+                <span aria-hidden="true">🧾</span>
                 <span className="text-sm font-medium text-[#1A1A18] flex-1 truncate">{r.name}</span>
                 <span className="text-xs text-[#9E9E98]">↓</span>
               </a>
@@ -264,7 +240,6 @@ export default function JobDetail() {
         </Card>
       )}
 
-      {/* Delete */}
       {isAdmin && (
         <>
           <div className="pb-8">
@@ -272,10 +247,14 @@ export default function JobDetail() {
           </div>
 
           <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete Job">
-            <p className="text-sm text-[#6B6B66] mb-5">Are you sure you want to delete <strong>{job.contactName}{job.referenceNumber ? ` (${job.referenceNumber})` : ''}</strong>? This cannot be undone.</p>
+            <p className="text-sm text-[#6B6B66] mb-5">
+              Are you sure you want to delete <strong>{job.contactName}{job.referenceNumber ? ` (${job.referenceNumber})` : ''}</strong>? This cannot be undone.
+            </p>
             <div className="flex gap-3">
               <Button variant="secondary" onClick={() => setConfirmDelete(false)} className="flex-1">Cancel</Button>
-              <Button variant="danger" onClick={handleDelete} className="flex-1">Delete</Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleteMutation.isPending} className="flex-1">
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </Button>
             </div>
           </Modal>
         </>
